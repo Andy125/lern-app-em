@@ -1,0 +1,6 @@
+node_modules/
+# Fotos, Arbeiten, Lernzettel und alles mit Namen oder Noten: nur lokal, nie ins öffentliche Repository
+privat/
+screenshots/
+test-results/
+.DS_Store
