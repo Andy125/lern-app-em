@@ -91,10 +91,14 @@
     return String(text).replace(/\{hund3\}/g, () => n || "deinem Hund").replace(/\{hund\}/g, () => n || "dein Hund");
   };
   const fach = () => FAECHER.find((f) => f.id === S.fach) || FAECHER[0];
+  const fachById = (id) => FAECHER.find((f) => f.id === id) || null;
+  // Fach der laufenden Runde (die gemeinsame Mission mischt Fächer), sonst das gewählte Fach
+  const rf = () => (ui && ui.runde && fachById(ui.runde.fachId)) || fach();
   const tag = () => { const d = heute(); return S.tage[d] || (S.tage[d] = { sek: 0, aufgaben: 0, richtig: 0, etappen: 0, mission: false }); };
   const tagLesen = () => S.tage[heute()] || { sek: 0, aufgaben: 0, richtig: 0, etappen: 0, mission: false };
 
   function toast(text) {
+    document.querySelectorAll(".toast").forEach((x) => x.remove()); // nie mehrere übereinander
     const t = document.createElement("div"); t.className = "toast"; t.setAttribute("role", "status"); t.textContent = text;
     document.body.appendChild(t); setTimeout(() => t.classList.add("weg"), 2400); setTimeout(() => t.remove(), 2900);
   }
@@ -109,13 +113,20 @@
       o.connect(g); g.connect(ac.destination); o.start(t0); o.stop(t0 + 0.4);
     } catch (e) { /* ohne Ton */ }
   }
-  function sprich(text) {
+  // sprich("Text") liest deutsch; sprich([["Text", "de"], ["dog", "en"]]) liest Teile in verschiedenen Sprachen
+  function sprich(teile) {
     try {
-      if (!("speechSynthesis" in window) || !text) return;
+      if (!("speechSynthesis" in window) || !teile) return;
+      if (!Array.isArray(teile)) teile = [[teile, "de"]];
       speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(mitHund(text)); u.lang = "de-DE"; u.rate = 0.95;
-      const v = speechSynthesis.getVoices().find((x) => /^de/i.test(x.lang)); if (v) u.voice = v;
-      speechSynthesis.speak(u);
+      const stimmen = speechSynthesis.getVoices();
+      for (const [text, lang] of teile) {
+        if (!text) continue;
+        const u = new SpeechSynthesisUtterance(mitHund(text));
+        u.lang = lang === "en" ? "en-GB" : "de-DE"; u.rate = lang === "en" ? 0.85 : 0.95;
+        const v = stimmen.find((x) => x.lang === u.lang) || stimmen.find((x) => x.lang.slice(0, 2) === u.lang.slice(0, 2)); if (v) u.voice = v;
+        speechSynthesis.speak(u);
+      }
     } catch (e) { /* ohne Vorlesen */ }
   }
   function konfetti() {
@@ -161,9 +172,9 @@
   function heutigerPlan(f) {
     const a = arbeitInfo(f);
     if (a.datum && !a.start) { const p = S.plan[f.id] || (S.plan[f.id] = { start: null, arbeit: null, titel: "" }); p.start = heute(); speichern(); a.start = p.start; }
-    const p = L.planTag(a.start, a.datum, f.themen.map((t) => t.id), heute());
+    const p = L.planTag(a.start, a.datum, L.planThemen(f).map((t) => t.id), heute());
     // Ohne Datum: ein Thema nach dem anderen, bis es halbwegs sitzt (dann das nächste)
-    if (!a.datum) { const fokus = f.themen.find((t) => L.bereitschaft(S, f, t.id) < 60); if (fokus) return Object.assign({}, p, { art: "lernen", themen: [fokus.id] }); }
+    if (!a.datum) { const fokus = L.planThemen(f).find((t) => L.bereitschaft(S, f, t.id) < 60); if (fokus) return Object.assign({}, p, { art: "lernen", themen: [fokus.id] }); }
     return p;
   }
   function fakt(f, themen, nr) {
@@ -187,6 +198,24 @@
     }
     return "";
   }
+
+  // Gemeinsame Tagesmission über alle Fächer: Das Fach mit der nächsten Arbeit bekommt den Schwerpunkt
+  // (Neues und Festigen), ein anderes Fach wird zum Aufwärmen wiederholt. Kurz vor einer Arbeit nur dieses Fach.
+  function missionHeute() {
+    const liste = FAECHER.map((f, i) => { const a = arbeitInfo(f); const d = a.datum ? L.tageBis(heute(), a.datum) : null; return { f, i, p: heutigerPlan(f), d: d != null && d >= 0 ? d : null }; });
+    liste.sort((x, y) => (x.d == null ? 9999 : x.d) - (y.d == null ? 9999 : y.d) || x.i - y.i);
+    const h = liste[0];
+    const etappen = L.etappenFuer(h.p).map((e) => Object.assign({}, e, { fach: h.f.id }));
+    const knapp = h.d != null && h.d <= 2;
+    const n = liste.find((x) => x !== h);
+    if (n && !knapp && etappen.length === 3) {
+      const nt = n.p.art === "lernen" ? n.p.themen : null;
+      const gesehen = L.fachTeile(n.f).some((t) => L.teilStand(S, n.f.id, t.id).n > 0);
+      etappen[0] = { titel: "Aufwärmen", art: gesehen ? "wdh" : "neu", themen: gesehen ? null : (nt || [L.planThemen(n.f)[0].id]), fach: n.f.id };
+    }
+    return { etappen, haupt: h, neben: n, knapp };
+  }
+  const fachKurz = (id) => { const f = fachById(id); return f ? (f.kurz || f.name) : ""; };
 
   // ================= Zustand der Oberfläche =================
   let ui;
@@ -225,18 +254,22 @@
   function start() {
     const f = fach();
     const p = heutigerPlan(f);
-    const a = arbeitInfo(f);
     const t = tagLesen();
-    const etappen = L.etappenFuer(p);
+    const m = missionHeute();
+    const etappen = m.etappen;
     const fertig = t.mission;
     const kiste = (S.fehler[f.id] || []).length;
-    let countdown = "";
-    if (a.datum) {
-      const d = L.tageBis(heute(), a.datum);
-      if (d > 1) countdown = `Noch <b>${d} Tage</b> bis zur Arbeit «${esc(a.titel)}»`;
-      else if (d === 1) countdown = `Morgen ist die Arbeit «${esc(a.titel)}». Heute nur in Ruhe wiederholen.`;
-      else if (d === 0) countdown = `Heute ist die Arbeit. Du hast gut geübt, du schaffst das!`;
-    }
+    // Countdown für jede anstehende Arbeit, die nächste zuerst
+    const countdown = FAECHER.map((x) => ({ x, a: arbeitInfo(x) })).filter((o) => o.a.datum && L.tageBis(heute(), o.a.datum) >= 0)
+      .sort((u, v) => L.tageBis(heute(), u.a.datum) - L.tageBis(heute(), v.a.datum)).slice(0, 2).map(({ a }) => {
+        const d = L.tageBis(heute(), a.datum);
+        return d > 1 ? `Noch <b>${d} Tage</b> bis «${esc(a.titel)}»` : d === 1 ? `Morgen ist «${esc(a.titel)}». Heute nur in Ruhe wiederholen.` : `Heute ist «${esc(a.titel)}». Du hast gut geübt, du schaffst das!`;
+      }).join("<br>");
+    const mehrere = new Set(etappen.map((e) => e.fach)).size > 1 || FAECHER.length > 1;
+    const hp = m.haupt.p, hf = m.haupt.f;
+    const kurzPlan = { lernen: () => `Neues zu «${(hp.themen || []).map((id) => themaName(hf, id)).join(", ")}»`, mix: () => "alles gemischt üben", probe: () => "Probe-Arbeit und Schwaches stärken", wiederholen: () => "in Ruhe wiederholen" }[hp.art];
+    const missionText = !mehrere || !kurzPlan ? esc(planText(hf, hp))
+      : (m.neben && etappen[0].fach !== hf.id ? `Zum Aufwärmen ${esc(fachKurz(etappen[0].fach))}, dann ` : "") + esc(fachKurz(hf.id) + ": " + kurzPlan());
     const punkte = etappen.map((e, i) => `<span class="etappe-punkt${fertig || i < t.etappen ? " fertig" : ""}" title="${esc(e.titel)}">${fertig || i < t.etappen ? "✓" : i + 1}</span>`).join("");
     const knopf = fertig ? "Bonus-Runde" : t.etappen > 0 ? `Weiter mit Etappe ${t.etappen + 1}` : "Los geht's";
     const tageWoche = Object.keys(S.tage).filter((d) => L.tageBis(d, heute()) < 7 && L.tageBis(d, heute()) >= 0 && S.tage[d].aufgaben > 0).length;
@@ -250,7 +283,7 @@
       ${countdown ? `<p class="countdown">${countdown}</p>` : ""}
       <section class="mission karte">
         <div><h2>${fertig ? "Tagesmission geschafft! 🎉" : "Tagesmission"}</h2>
-        <p>${esc(planText(f, p))}</p>
+        <p>${missionText}</p>
         <div class="etappen-punkte" aria-label="Etappen">${punkte}</div></div>
         <button class="btn haupt gross" data-act="mission">${knopf}</button>
       </section>
@@ -276,7 +309,8 @@
     render();
   }
   function bereiteEtappe() {
-    const R = ui.runde, e = R.etappen[R.nr], f = fach();
+    const R = ui.runde, e = R.etappen[R.nr], f = fachById(e.fach) || fach();
+    R.fachId = f.id;
     const n = e.n || S.einst.etappe;
     R.specs = L.buildEtappe(f, S, { n, seed: zufall(), art: e.art, themen: e.themen });
     R.i = -1; R.richtig = 0; R.ersteRichtig = 0; R.serie = 0; R.nochmal = 0; R.muenzenStart = S.muenzen;
@@ -287,7 +321,7 @@
     const R = ui.runde; R.i++;
     if (R.i >= R.specs.length) return etappeFertig();
     const s = R.specs[R.i];
-    R.task = L.makeTask(fach(), s.teil, s.modus, s.seed);
+    R.task = L.makeTask(rf(), s.teil, s.modus, s.seed);
     if (!R.task) return naechsteAufgabe();
     R.versuche = 0; R.status = "offen"; R.antwort = startAntwort(R.task); R.wahl = null; R.falsch = []; R.tippOffen = false;
     ui.ansicht = "runde"; letzteAktion = Date.now();
@@ -306,7 +340,7 @@
   const maxVersuche = (t) => (t.art === "wahr" || (t.art === "wahl" && t.optionen.length <= 2) ? 1 : 2);
 
   function pruefe(antwort) {
-    const R = ui.runde, t = R.task, f = fach();
+    const R = ui.runde, t = R.task, f = rf();
     if (R.status !== "offen" && R.status !== "tipp") return;
     const r = L.check(t, antwort);
     if (!r.ok && r.leer) { toast("Schreib zuerst etwas hinein."); return; }
@@ -323,10 +357,12 @@
       R.exakt = r.exakt !== false;
       ton(R.serie);
       speichern(); render(); plusAnzeigen("+" + m);
+      if (S.einst.vorlesen && t.englisch) sprich([[t.englisch, "en"]]);
       if (R.serie > 0 && R.serie % 5 === 0) konfetti();
       return;
     }
     R.versuche++; R.serie = 0;
+    R.hinweis = r.grossKlein ? "Achte auf Groß- und Kleinschreibung: Englische Nomen schreibt man klein." : r.fast ? "Ganz knapp! Ein kleiner Schreibfehler, schau genau auf jeden Buchstaben." : "";
     if (R.versuche === 1) L.record(S, f.id, t.teil, false, heute());
     // Teilweise Richtiges bleibt stehen, Falsches wird zurückgelegt
     if (t.art === "wahl" || t.art === "tippen") R.falsch.push(antwort);
@@ -359,7 +395,7 @@
   function rundeKopf() {
     const R = ui.runde;
     const e = R.etappen[R.nr];
-    const titel = R.typ === "probe" ? "Probe-Arbeit" : R.etappen.length > 1 ? `Etappe ${R.nr + 1} von ${R.etappen.length} · ${e.titel}` : (R.titel || e.titel);
+    const titel = (FAECHER.length > 1 ? rf().icon + " " : "") + (R.typ === "probe" ? "Probe-Arbeit" : R.etappen.length > 1 ? `Etappe ${R.nr + 1} von ${R.etappen.length} · ${e.titel}` : (R.titel || e.titel));
     const dots = R.specs.map((_, i) => `<i class="${i < R.i ? "fertig" : i === R.i ? "jetzt" : ""}"></i>`).join("");
     const mood = R.status === "richtig" ? "jubel" : "froh";
     return `<header class="kopf runde-kopf">
@@ -371,7 +407,7 @@
 
   // ---------- Bild mit Nummern ----------
   function figHtml(t, R, probe) {
-    const k = fach().themen.flatMap((th) => th.karten).find((x) => x.id === t.fig.karte);
+    const k = rf().themen.flatMap((th) => th.karten).find((x) => x.id === t.fig.karte);
     if (!k) return "";
     const zeigeLoesung = R.status === "loesung" || R.status === "richtig";
     const marken = k.marken.map((m) => {
@@ -398,7 +434,7 @@
     const fertig = !probe && (R.status === "richtig" || R.status === "loesung");
     const loes = !probe && R.status === "loesung";
     let h = `<div class="frage-zeile"><h2 class="frage">${esc(t.frage)}</h2><button class="vorlesen" data-act="vorlesen" aria-label="Vorlesen">🔊</button></div>`;
-    if (t.text) h += `<p class="aufgaben-text${t.art === "wahr" ? " satz" : ""}">${esc(t.text)}</p>`;
+    if (t.text) h += `<p class="aufgaben-text${t.art === "wahr" ? " satz" : ""}"${t.textSprache === "en" ? ' lang="en"' : ""}>${esc(t.text)}${t.textSprache === "en" && t.modus === "en-de-wahl" ? ` <button class="vorlesen klein inline" data-act="sag-en" data-arg="${esc(t.text)}" aria-label="Englisch anhören">🔊</button>` : ""}</p>`;
     if (t.fig) h += figHtml(t, R, probe);
     switch (t.art) {
       case "wahl": case "wahr": {
@@ -463,7 +499,7 @@
       }
       case "schreiben": case "zahl":
         h += `<form class="schreib" data-act-submit="1" onsubmit="return false">
-          <input id="eingabe" class="eingabe${loes ? " loesung" : ""}" ${t.art === "zahl" ? 'inputmode="decimal"' : 'autocapitalize="sentences"'} autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done" value="${esc(loes ? t.loesung : R.antwort)}" ${fertig ? "disabled" : ""} aria-label="Deine Antwort">
+          <input id="eingabe" class="eingabe${loes ? " loesung" : ""}" ${t.art === "zahl" ? 'inputmode="decimal"' : t.sprache === "en" ? 'autocapitalize="none" lang="en"' : 'autocapitalize="sentences"'} autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done" value="${esc(loes ? t.loesung : R.antwort)}" ${fertig ? "disabled" : ""} aria-label="Deine Antwort">
           ${t.einheit ? `<span class="einheit">${esc(t.einheit)}</span>` : ""}</form>`;
         if (!fertig) h += pruefKnopf(probe, true);
         if (fertig && t.art === "schreiben" && R.status === "richtig" && !R.exakt) h += `<p class="schreibweise">Richtig! So schreibt man es: <b>${esc(t.loesung)}</b>${vergleich(R.antwort, t.loesung)}</p>`;
@@ -498,15 +534,16 @@
 
   function runde() {
     const R = ui.runde, t = R.task;
-    const st = L.teilStand(S, fach().id, t.teil);
+    const st = L.teilStand(S, rf().id, t.teil);
     const warum = t.warum && (R.versuche > 0 || st.n <= 2) ? `<p class="warum">🐶 ${esc(t.warum)}</p>` : "";
+    const hoeren = t.englisch ? `<p><button class="btn" data-act="sag-en" data-arg="${esc(t.englisch)}">🔊 So spricht man «${esc(t.englisch)}»</button></p>` : "";
     let unten = "";
     if (R.status === "tipp") {
-      unten = `<div class="rueck tipp" role="status"><b>${esc(R.text)}</b><p>💡 ${esc(t.tipp)}</p>${t.art === "mehr" && R.fehlt ? `<p>Es fehlt noch etwas.</p>` : ""}</div>`;
+      unten = `<div class="rueck tipp" role="status"><b>${esc(R.text)}</b>${R.hinweis ? `<p>${esc(R.hinweis)}</p>` : ""}<p>💡 ${esc(t.tipp)}</p>${t.art === "mehr" && R.fehlt ? `<p>Es fehlt noch etwas.</p>` : ""}</div>`;
     } else if (R.status === "richtig") {
-      unten = `<div class="rueck gut" role="status"><b>${esc(R.lob)}</b>${R.versuche > 0 && t.erklaerung ? `<p>${esc(t.erklaerung)}</p>` : ""}${warum}<button class="btn haupt" data-act="weiter" autofocus>Weiter</button></div>`;
+      unten = `<div class="rueck gut" role="status"><b>${esc(R.lob)}</b>${R.versuche > 0 && t.erklaerung ? `<p>${esc(t.erklaerung)}</p>` : ""}${hoeren}${warum}<button class="btn haupt" data-act="weiter" autofocus>Weiter</button></div>`;
     } else if (R.status === "loesung") {
-      unten = `<div class="rueck loesung" role="status"><b>${esc(R.text)}</b>${loesungKasten(t) ? `<p>${loesungKasten(t)}</p>` : ""}${t.erklaerung ? `<p>${esc(t.erklaerung)}</p>` : ""}${t.merk ? `<p class="merk">🧠 Merkhilfe: ${esc(t.merk)}</p>` : ""}${warum}<p class="leise klein">Diese Aufgabe kommt gleich noch einmal.</p><button class="btn haupt" data-act="weiter">Verstanden, weiter</button></div>`;
+      unten = `<div class="rueck loesung" role="status"><b>${esc(R.text)}</b>${loesungKasten(t) ? `<p>${loesungKasten(t)}${t.art === "schreiben" && R.antwort ? vergleich(R.antwort, t.loesung) : ""}</p>` : ""}${hoeren}${t.erklaerung ? `<p>${esc(t.erklaerung)}</p>` : ""}${t.merk ? `<p class="merk">🧠 Merkhilfe: ${esc(t.merk)}</p>` : ""}${warum}<p class="leise klein">Diese Aufgabe kommt gleich noch einmal.</p><button class="btn haupt" data-act="weiter">Verstanden, weiter</button></div>`;
     } else if (R.status === "offen" && t.tipp && t.art !== "wahr") {
       unten = `<button class="tipp-knopf" data-act="tipp-zeigen">${R.tippOffen ? "💡 " + esc(t.tipp) : "💡 Ich brauche einen Tipp"}</button>`;
     }
@@ -518,8 +555,8 @@
     const titel = R.etappen.length > 1 ? `Etappe ${R.nr + 1} von ${R.etappen.length}` : (R.titel || "Los geht's");
     return `${kopf("", true)}<main class="mitte">
       <div class="gross-tier">${TIER.tierSvg(S.tier.art, { mood: "jubel", stufe: L.stufe(S.punkte), traegt: S.traegt })}</div>
-      <h1>${esc(titel)}</h1><p class="untertitel">${esc(e.titel)}${e.themen ? ": " + esc(e.themen.map((id) => themaName(fach(), id)).join(", ")) : ""}</p>
-      ${e.themen && e.themen.length === 1 && e.art === "neu" ? warumBox(fach().themen.find((t) => t.id === e.themen[0])) : (() => { const fk = fakt(fach(), e.themen, R.nr + L.tageBis("2026-01-01", heute())); return fk ? `<p class="fakt"><b>Wusstest du?</b> ${esc(fk)}</p>` : ""; })()}
+      ${(() => { const ef = fachById(e.fach) || fach(); return `<h1>${esc(titel)}</h1><p class="untertitel">${FAECHER.length > 1 ? esc(ef.icon + " " + (ef.kurz || ef.name)) + " · " : ""}${esc(e.titel)}${e.themen ? ": " + esc(e.themen.map((id) => themaName(ef, id)).join(", ")) : ""}</p>
+      ${e.themen && e.themen.length === 1 && e.art === "neu" ? warumBox(ef.themen.find((t) => t.id === e.themen[0])) : (() => { const fk = fakt(ef, e.themen, R.nr + L.tageBis("2026-01-01", heute())); return fk ? `<p class="fakt"><b>Wusstest du?</b> ${esc(fk)}</p>` : ""; })()}`; })()}
       <p class="leise">${e.n || S.einst.etappe} Aufgaben. ${R.nr === 0 && R.mission ? "Danach eine kurze Bewegungspause." : ""}</p>
       <button class="btn haupt gross" data-act="etappe-los">Los geht's!</button></main>`;
   }
@@ -578,7 +615,9 @@
   function karten() {
     const f = fach();
     const th = f.themen.find((x) => x.id === ui.thema) || f.themen[0];
-    const inhalt = th.karten.filter((k) => k.typ !== "auftrag").map((k) => {
+    const vok = th.karten.filter((k) => k.typ === "vokabel");
+    const vokListe = vok.length ? `<div class="lernkarte"><table class="vokabeln"><thead><tr><th>Englisch</th><th>Deutsch</th></tr></thead><tbody>${vok.map((k) => `<tr><td lang="en"><b>${esc(k.en)}</b>${(k.auchEn || []).length ? ` <span class="leise">(${esc(k.auchEn.join(", "))})</span>` : ""}</td><td>${esc(k.de)}</td><td><button class="vorlesen klein" data-act="sag-en" data-arg="${esc(k.en)}" aria-label="${esc(k.en)} anhören">🔊</button></td></tr>`).join("")}</tbody></table></div>` : "";
+    const inhalt = vokListe + th.karten.filter((k) => k.typ !== "auftrag" && k.typ !== "vokabel").map((k) => {
       const w = k.warum ? `<p class="warum">🐶 ${esc(k.warum)}</p>` : "";
       return lernkarte(k).replace(/<\/div>$/, w + "</div>");
     }).join("");
@@ -638,7 +677,7 @@
     P.i++;
     if (P.i >= P.specs.length) return probeFertig();
     const s = P.specs[P.i];
-    P.task = L.makeTask(fach(), s.teil, s.modus, s.seed);
+    P.task = L.makeTask(rf(), s.teil, s.modus, s.seed);
     P.antwort = startAntwort(P.task); P.wahl = null; P.status = "offen"; P.falsch = [];
     render();
     if (S.einst.vorlesen) vorlesen();
@@ -745,7 +784,7 @@
         ${proben.length ? `<ul>${proben.map((p) => `<li>${esc(p.datum)}: ${p.prozent} %</li>`).join("")}</ul>` : `<p class="leise">Noch keine.</p>`}`;
     } else if (reiter === "plan") {
       const a = arbeitInfo(f);
-      const liste = a.datum ? L.planListe(a.start && L.tageBis(a.start, heute()) >= 0 ? a.start : heute(), a.datum, f.themen.map((t) => t.id)) : [];
+      const liste = a.datum ? L.planListe(a.start && L.tageBis(a.start, heute()) >= 0 ? a.start : heute(), a.datum, L.planThemen(f).map((t) => t.id)) : [];
       const artName = { lernen: "Neu lernen", mix: "Gemischt üben", probe: "Probe-Arbeit", wiederholen: "Wiederholen", mut: "Tag der Arbeit" };
       inhalt = `<h2>Nächste Arbeit</h2>
         <label>Titel <input id="arbeit-titel" class="eingabe klein" value="${esc((S.plan[f.id] || {}).titel || (f.arbeit && f.arbeit.titel) || "")}" placeholder="z. B. Biologie: Wirbeltiere"></label>
@@ -836,9 +875,10 @@
   function vorlesen() {
     const R = ui.runde; if (!R || !R.task) return;
     const t = R.task;
-    let s = t.frage + (t.text ? ". " + t.text : "");
-    if (t.art === "wahl" || t.art === "mehr") s += ". " + t.optionen.join(". ");
-    sprich(s);
+    const teile = [[t.frage, "de"]];
+    if (t.text) teile.push([t.text.replace(/___/g, "…"), t.textSprache || "de"]);
+    if (t.art === "wahl" || t.art === "mehr") for (const o of t.optionen) teile.push([o, t.optionenSprache || "de"]);
+    sprich(teile);
   }
 
   // Langer Druck öffnet die Eltern-Übersicht (Kinder tippen nur kurz)
@@ -870,22 +910,23 @@
       case "fach": S.fach = arg; speichern(); gehe(ui.ansicht === "eltern" ? "eltern" : "start", ui.ansicht === "eltern" ? { reiter: "einst" } : null); return;
       // Mission und Runden
       case "mission": {
-        const f = fach(), p = heutigerPlan(f);
-        if (tag().mission) return starteRunde("bonus", [{ titel: "Bonus-Runde", art: "mix", themen: null }], "Bonus-Runde");
-        return starteRunde("mission", L.etappenFuer(p));
+        const m = missionHeute();
+        if (tag().mission) return starteRunde("bonus", [{ titel: "Bonus-Runde", art: "mix", themen: null, fach: m.haupt.f.id }], "Bonus-Runde");
+        return starteRunde("mission", m.etappen);
       }
       case "etappe-los": if (bereiteEtappe()) naechsteAufgabe(); return;
       case "naechste-etappe": clearInterval(pauseTimer); R.nr++; ui = { ansicht: "etappe-start", runde: R }; render(); return;
       case "bewegung": starteBewegung(); return;
       case "pause-runde": zeitBuchen(); speichern(); gehe("start"); return;
       case "themen": gehe("themen"); return;
-      case "thema": return starteRunde("ueben", [{ titel: arg ? themaName(fach(), arg) : "Alles gemischt", art: arg && L.fachTeile(fach()).some((t) => t.thema === arg && L.teilStand(S, fach().id, t.id).n === 0) ? "neu" : "mix", themen: arg ? [arg] : null }], arg ? themaName(fach(), arg) : "Alles gemischt");
-      case "kiste": { const n = (S.fehler[fach().id] || []).length; if (!n) return; return starteRunde("kiste", [{ titel: "Fehlerkiste", art: "kiste", themen: null, n: Math.min(10, n) }], "Fehlerkiste"); }
+      case "thema": return starteRunde("ueben", [{ titel: arg ? themaName(fach(), arg) : "Alles gemischt", art: arg && L.fachTeile(fach()).some((t) => t.thema === arg && L.teilStand(S, fach().id, t.id).n === 0) ? "neu" : "mix", themen: arg ? [arg] : null, fach: fach().id }], arg ? themaName(fach(), arg) : "Alles gemischt");
+      case "kiste": { const n = (S.fehler[fach().id] || []).length; if (!n) return; return starteRunde("kiste", [{ titel: "Fehlerkiste", art: "kiste", themen: null, n: Math.min(10, n), fach: fach().id }], "Fehlerkiste"); }
       case "karten": gehe("karten", { thema: null }); return;
       case "auftraege": gehe("auftraege"); return;
       case "auftrag-fertig": if (L.auftragErledigt(S, arg, heute())) { speichern(); render(); konfetti(); ton(12); plusAnzeigen("+" + L.LOHN.auftrag); toast(`Super gemacht! +${L.LOHN.auftrag} Münzen für ${tierName()}.`); } return;
       case "karten-thema": ui.thema = arg; render(); return;
       case "sag": sprich(arg); return;
+      case "sag-en": sprich([[arg, "en"]]); return;
       case "vorlesen": vorlesen(); return;
       case "tipp-zeigen": if (R) { R.tippOffen = true; render(); } return;
       case "weiter": naechsteAufgabe(); return;
@@ -939,7 +980,7 @@
       case "probe-start": gehe("probe-start"); return;
       case "probe-los": {
         const specs = L.buildProbe(fach(), S, { n: S.einst.probeAnzahl, seed: zufall() });
-        ui = { ansicht: "probe", runde: { typ: "probe", specs, i: -1, ergebnisse: [], etappen: [{ titel: "Probe" }], nr: 0 } };
+        ui = { ansicht: "probe", runde: { typ: "probe", specs, i: -1, ergebnisse: [], etappen: [{ titel: "Probe" }], nr: 0, fachId: fach().id } };
         probeNaechste(); return;
       }
       case "probe-weiter": probeAntwort(false); return;

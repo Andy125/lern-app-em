@@ -31,32 +31,38 @@ for (const [name, vp] of [["iPad hochkant", IPAD_HOCH], ["iPad quer", IPAD_QUER]
   await einrichten(page);
   await messe(page, name + " Start");
   await foto("start");
-  // Jede Aufgabenart einmal: Aufgaben direkt erzeugen lassen
+  // Jede Aufgabenart jedes Fachs einmal: im Fach frei üben und die Aufgaben direkt einfügen
   const arten = new Set();
-  await page.click("[data-act=mission]");
-  await page.click("[data-act=etappe-los]");
-  const teile = await page.evaluate(() => { const f = window.LN_FAECHER[0]; return window.LN.fachTeile(f).map((t) => ({ id: t.id, modi: [...new Set(window.LN.modi(t.karte))] })); });
-  for (const t of teile) for (const m of t.modi) {
-    const art = await page.evaluate(([id, modus]) => { const f = window.LN_FAECHER[0]; const R = window.__LN.ui().runde; R.specs.splice(R.i + 1, 0, { teil: id, modus, seed: 5 }); return window.LN.makeTask(f, id, modus, 5).art; }, [t.id, m]);
-    if (arten.has(art + m)) { await page.evaluate(() => { const R = window.__LN.ui().runde; R.specs.splice(R.i + 1, 1); }); continue; }
-    arten.add(art + m);
-    // zur eingefügten Aufgabe springen
-    const st = await page.evaluate(() => window.__LN.ui().runde.status);
-    if (st === "offen" || st === "tipp") await loese(page);
-    await page.click("[data-act=weiter]");
-    if ((await ansicht(page)) !== "runde") break;
-    await messe(page, `${name} ${m}`);
-    await foto("aufgabe-" + m);
-    if (m === "bild-tippen") {
-      // Daneben tippen (16 px schräg neben die richtige Stelle) zählt trotzdem für die nächste Stelle
-      const t = await page.evaluate(() => window.__LN.aufgabe());
-      const b = await page.locator(`[data-act=tippen][data-arg="${t.loesung}"] circle.ring`).boundingBox();
-      await page.mouse.click(b.x + b.width / 2 + 11, b.y + b.height / 2 + 11);
-      ok((await page.evaluate(() => window.__LN.ui().runde.status)) === "richtig", `${name}: knapp daneben getippt zählt für die nächste Stelle`);
+  const faecher = await page.evaluate(() => window.LN_FAECHER.map((f) => f.id));
+  for (const fid of faecher) {
+    if (faecher.length > 1) await page.click(`[data-act=fach][data-arg=${fid}]`);
+    await page.click("[data-act=themen]");
+    await page.click('[data-act=thema][data-arg=""]');
+    await page.click("[data-act=etappe-los]");
+    const teile = await page.evaluate((fid) => { const f = window.LN_FAECHER.find((x) => x.id === fid); return window.LN.fachTeile(f).map((t) => ({ id: t.id, modi: [...new Set(window.LN.modi(t.karte))] })); }, fid);
+    for (const t of teile) for (const m of t.modi) {
+      if (arten.has(m)) continue;
+      arten.add(m);
+      await page.evaluate(([id, modus]) => { const R = window.__LN.ui().runde; R.specs.splice(R.i + 1, 0, { teil: id, modus, seed: 5 }); }, [t.id, m]);
+      const st = await page.evaluate(() => window.__LN.ui().runde.status);
+      if (st === "offen" || st === "tipp") await loese(page);
+      await page.click("[data-act=weiter]");
+      if ((await ansicht(page)) !== "runde") break;
+      await messe(page, `${name} ${m}`);
+      await foto("aufgabe-" + m);
+      if (m === "bild-tippen") {
+        // Daneben tippen (16 px schräg neben die richtige Stelle) zählt trotzdem für die nächste Stelle
+        const a = await page.evaluate(() => window.__LN.aufgabe());
+        const b = await page.locator(`[data-act=tippen][data-arg="${a.loesung}"] circle.ring`).boundingBox();
+        await page.mouse.click(b.x + b.width / 2 + 11, b.y + b.height / 2 + 11);
+        ok((await page.evaluate(() => window.__LN.ui().runde.status)) === "richtig", `${name}: knapp daneben getippt zählt für die nächste Stelle`);
+      }
     }
+    await page.click("[data-act=pause-runde]");
   }
-  ok(arten.size >= 9, `${name}: alle Aufgabenarten angezeigt (${arten.size})`);
-  await page.click("[data-act=pause-runde]");
+  if (faecher.length > 1) await page.click(`[data-act=fach][data-arg=${faecher[0]}]`);
+  const alleArten = await page.evaluate(() => { const m = new Set(); for (const f of window.LN_FAECHER) for (const t of window.LN.fachTeile(f)) for (const x of window.LN.modi(t.karte)) m.add(x); return m.size; });
+  ok(arten.size === alleArten, `${name}: alle ${alleArten} Aufgabenarten angezeigt (${arten.size})`);
   await page.click(".kachel[data-act=tier]");
   await messe(page, name + " Tier");
   await foto("tier");

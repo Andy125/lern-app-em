@@ -30,6 +30,7 @@ await foto("02-start");
 // ---------- Tagesmission ----------
 await page.click("[data-act=mission]");
 ok((await ansicht(page)) === "etappe-start" && (await page.textContent("main")).includes("Etappe 1 von 3"), "Etappe 1 von 3 startet");
+ok((await page.textContent(".untertitel")).includes("Englisch"), "gemeinsame Mission: Aufwärmen mit dem anderen Fach (Englisch)");
 await keinPlatzhalter("Etappe 1");
 await page.click("[data-act=etappe-los]");
 await foto("03-aufgabe");
@@ -44,7 +45,7 @@ else {
   ok((await page.evaluate(() => window.__LN.ui().runde.status)) === "richtig", "danach richtig gelöst");
 }
 s = await stand(page);
-ok((s.fehler[FID] || []).includes(t.teil), "Fehler liegt in der Fehlerkiste");
+ok(Object.values(s.fehler).some((l) => l.includes(t.teil)), "Fehler liegt in der Fehlerkiste");
 await page.click("[data-act=weiter]");
 // zweite Aufgabe: zweimal falsch, dann kommt die Lösung und die Aufgabe kommt wieder
 t = await aufgabe(page);
@@ -69,7 +70,7 @@ ok((await ansicht(page)) === "bewegung" && (await page.locator("#pause-weiter").
 await foto("07-bewegung");
 await page.waitForFunction(() => !document.getElementById("pause-weiter").disabled, null, { timeout: 5000 });
 await page.click("#pause-weiter");
-ok((await page.textContent("main")).includes("Etappe 2 von 3"), "Etappe 2 startet nach der Pause");
+ok((await page.textContent("main")).includes("Etappe 2 von 3") && (await page.textContent(".untertitel")).includes("Bio"), "Etappe 2 startet nach der Pause, Schwerpunkt Bio");
 ok((await page.locator(".warum-box").count()) === 1 && (await page.textContent(".warum-box")).includes("Flocke"), "Neues Thema beginnt mit der Warum-Frage, mit dem Namen des Hundes");
 await foto("07b-warum");
 await spieleEtappe(page);
@@ -202,7 +203,36 @@ ok((await page.textContent("main")).includes("Testhund") && !(await page.textCon
 await keinPlatzhalter("Lernkarten mit Hundename");
 await page.click("[data-act=heim]");
 ok((await page.textContent(".countdown")).includes("14 Tage") && (await page.textContent(".countdown")).includes("Bio-Arbeit"), "Countdown zur Arbeit");
-ok((await page.textContent(".mission")).includes("Heute neu"), "Plan zeigt das heutige Thema");
+ok((await page.textContent(".mission")).includes("Bio: Neues zu «Das Skelett»") && (await page.textContent(".mission")).includes("Aufwärmen Englisch"), "Mission zeigt Schwerpunkt Bio (Arbeit zuerst) und Aufwärmen Englisch");
+
+// ---------- Englisch: Fach wählen, Vokabeln, strenge Rechtschreibung ----------
+ok((await page.locator(".fach-tab").count()) === 2, "zwei Fächer als Reiter");
+await page.click("[data-act=fach][data-arg=englisch]");
+ok((await stand(page)).fach === "englisch" && (await page.locator(".fach-tab.aktiv").textContent()).includes("Englisch"), "Englisch gewählt");
+await page.click("[data-act=karten]");
+ok((await page.locator("table.vokabeln tbody tr").count()) >= 15, "Vokabelliste in den Lernkarten");
+ok((await page.locator("[data-act=sag-en]").count()) >= 15, "jede Vokabel zum Anhören");
+await page.click("[data-act=heim]");
+await page.click("[data-act=themen]");
+await page.click("[data-act=thema][data-arg=hunde-englisch]");
+await page.click("[data-act=etappe-los]");
+await page.evaluate(() => { const R = window.__LN.ui().runde; R.specs.splice(R.i + 1, 0, { teil: "he-dog", modus: "de-en-schreiben", seed: 1 }); });
+await loese(page); await page.click("[data-act=weiter]");
+t = await aufgabe(page);
+ok(t.modus === "de-en-schreiben" && t.loesung === "dog", "Schreibaufgabe Deutsch → Englisch");
+ok((await page.getAttribute("#eingabe", "autocapitalize")) === "none", "iPad schreibt den ersten Buchstaben nicht automatisch groß");
+await page.fill("#eingabe", "Dog"); await page.click("[data-act=pruefen]");
+ok((await page.evaluate(() => window.__LN.ui().runde.status)) === "tipp" && (await page.textContent(".rueck.tipp")).includes("Kleinschreibung"), "«Dog» statt «dog»: freundlicher Hinweis auf Kleinschreibung");
+await page.fill("#eingabe", "dog"); await page.click("[data-act=pruefen]");
+ok((await page.evaluate(() => window.__LN.ui().runde.status)) === "richtig", "«dog» ist richtig");
+ok((await page.locator(".rueck.gut [data-act=sag-en]").count()) === 1, "Aussprache zum Anhören");
+await foto("16-englisch");
+await page.click("[data-act=weiter]");
+while ((await ansicht(page)) === "runde") { const st = await page.evaluate(() => window.__LN.ui().runde.status); if (st === "richtig" || st === "loesung") await page.click("[data-act=weiter]"); else await loese(page); }
+ok((await stand(page)).fortschritt.englisch && Object.keys((await stand(page)).fortschritt.englisch).length >= 5, "Fortschritt im Fach Englisch");
+await page.click("[data-act=heim]");
+await page.click("[data-act=fach][data-arg=bio]");
+await keinPlatzhalter("Englisch");
 
 // ---------- Sicherung ----------
 await langDruecken(page, "#eltern-knopf", 450);

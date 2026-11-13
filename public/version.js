@@ -1,2 +1,2 @@
 // Versionsnummer der App. Muss zum Cache-Namen in sw.js passen (lernnest-v<n>), das prüft tools/test-version.mjs.
-window.LN_VERSION = { n: 2, date: "2026-11-13" };
+window.LN_VERSION = { n: 3, date: "2026-11-13" };
