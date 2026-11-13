@@ -97,6 +97,20 @@
     }
     return { ok: true, exakt: false };
   }
+  // Englische Vokabeln: Rechtschreibung zählt genau (auch klein/groß). «to», «a», «an», «the» am Anfang
+  // dürfen fehlen oder dabei sein, Satzzeichen am Ende sind egal.
+  function pruefeEnglisch(eingabe, ziel, auch) {
+    const sauber = (x) => String(x == null ? "" : x).trim().replace(/[’‘`´]/g, "'").replace(/\s+/g, " ").replace(/[!?.]+$/, "").trim();
+    const kurz = (x) => x.replace(/^(to|a|an|the) /i, "");
+    const e = sauber(eingabe);
+    if (!e) return { ok: false, exakt: false, leer: true };
+    const ziele = [ziel].concat(auch || []).map(sauber);
+    if (ziele.some((z) => z === e || kurz(z) === kurz(e))) return { ok: true, exakt: true };
+    const kl = (x) => kurz(x).toLowerCase();
+    if (ziele.some((z) => kl(z) === kl(e))) return { ok: false, exakt: false, grossKlein: true };
+    if (ziele.some((z) => lev(kl(z), kl(e)) <= 2)) return { ok: false, exakt: false, fast: true };
+    return { ok: false, exakt: false };
+  }
   function parseZahl(s) {
     const t = String(s == null ? "" : s).trim().replace(/[\s  .']/g, "").replace(",", ".");
     if (!/^-?\d+(\.\d+)?$/.test(t)) return NaN;
@@ -106,7 +120,7 @@
   // ---------- Inhalte ----------
   // Ein Fach hat Themen, ein Thema hat Karten. Aus jeder Karte entstehen ein oder mehrere Lernteile
   // (bei Bild, Paaren und Gruppen einer je Eintrag), jeder Lernteil hat einen eigenen Fortschritt.
-  const TYPEN = ["begriff", "frage", "zahl", "wahr", "paare", "gruppen", "reihe", "luecke", "bild"];
+  const TYPEN = ["begriff", "frage", "zahl", "wahr", "paare", "gruppen", "reihe", "luecke", "bild", "vokabel"];
   function fachTeile(fach) {
     if (fach.__teile) return fach.__teile;
     const teile = [];
@@ -117,7 +131,7 @@
         if (k.typ === "bild") k.marken.forEach((m) => teile.push(Object.assign({ id: k.id + "#" + m.nr, teil: m.nr, name: m.begriff }, base)));
         else if (k.typ === "paare") k.paare.forEach((p, i) => teile.push(Object.assign({ id: k.id + "#" + i, teil: i, name: p[0] + " → " + p[1] }, base)));
         else if (k.typ === "gruppen") gruppenListe(k).forEach((g, i) => teile.push(Object.assign({ id: k.id + "#" + i, teil: i, name: g[0] + " (" + g[1] + ")" }, base)));
-        else teile.push(Object.assign({ id: k.id, teil: null, name: k.begriff || k.titel || k.frage || k.satz || (k.text ? kurz(String(k.text).replace(/[{}]/g, ""), 50) : k.id) }, base));
+        else teile.push(Object.assign({ id: k.id, teil: null, name: k.en || k.begriff || k.titel || k.frage || k.satz || (k.text ? kurz(String(k.text).replace(/[{}]/g, ""), 50) : k.id) }, base));
       }
     }
     Object.defineProperty(fach, "__teile", { value: teile, enumerable: false });
@@ -125,6 +139,12 @@
   }
   const kurz = (s, n) => (s.length > n ? s.slice(0, n - 1).replace(/\s+\S*$/, "") + " …" : s);
   const auftraege = (fach) => fach.themen.flatMap((th) => th.karten.filter((k) => k.typ === "auftrag").map((k) => Object.assign({ thema: th.id }, k)));
+  function vokabelnFach(fach) {
+    if (fach.__vok) return fach.__vok;
+    const v = []; for (const th of fach.themen) for (const k of th.karten) if (k.typ === "vokabel") { Object.defineProperty(k, "__thema", { value: th.id, enumerable: false, configurable: true }); v.push(k); }
+    Object.defineProperty(fach, "__vok", { value: v, enumerable: false });
+    return v;
+  }
   const teilById = (fach, id) => fachTeile(fach).find((t) => t.id === id) || null;
   function gruppenListe(k) { const out = []; for (const g of Object.keys(k.gruppen)) for (const x of k.gruppen[g]) out.push([x, g]); return out; }
   const alleBegriffe = (fach) => {
@@ -149,15 +169,24 @@
       case "reihe": return ["reihe"];
       case "luecke": return ["luecke"];
       case "bild": return ["bild-wahl", "bild-tippen", "bild-schreiben"];
+      case "vokabel": return ["en-de-wahl", "de-en-wahl", "de-en-schreiben"].concat(k.satz ? ["satz-wahl"] : []);
     }
     return [];
   }
+  // Themen für Plan und Probe: Bonus-Themen nur, wenn es sonst keine gibt
+  const planThemen = (fach) => { const t = fach.themen.filter((x) => !x.bonus); return t.length ? t : fach.themen; };
+  const istVerb = (k) => /^to /i.test(k.en || "");
+  const satzLuecke = (k) => { const m = String(k.satz || "").match(/\{([^}]+)\}/); return m ? m[1] : null; };
   // Paare mit sich wiederholender rechter Seite sind Zuordnungen zu Gruppen (Forelle → Fische)
   const kategorien = (k) => new Set(k.paare.map((p) => p[1])).size < k.paare.length;
   function modusFuerStufe(k, box, r) {
-    const m = modi(k);
+    const m = k.typ === "vokabel" ? modi(k).slice(0, 3) : modi(k);
     let i = Math.min(m.length - 1, box <= 0 ? 0 : box <= 2 ? 1 : 2);
-    if (r && i > 0 && r.f() < 0.25) i -= 1; // ab und zu eine leichtere Form zum Durchatmen
+    if (r && i > 0 && r.f() < 0.25) {
+      // ab und zu eine leichtere Form zum Durchatmen, bei Vokabeln gern der Lückensatz
+      if (k.typ === "vokabel" && k.satz) return "satz-wahl";
+      i -= 1;
+    }
     return m[i];
   }
 
@@ -282,6 +311,30 @@
         t.erklaerung = t.erklaerung || "Nummer " + m.nr + " ist " + m.begriff + ".";
         break;
       }
+      case "en-de-wahl": case "de-en-wahl": {
+        const andere = vokabelnFach(fach).filter((x) => x !== k);
+        const gleich = andere.filter((x) => x.__thema === teil.thema);
+        const pool = gleich.length >= 3 ? gleich : andere;
+        const enDe = modus === "en-de-wahl";
+        const opts = optionenMit(r, enDe ? k.de : k.en, pool.map((x) => (enDe ? x.de : x.en)), 4);
+        Object.assign(t, { art: "wahl", frage: enDe ? "Was heißt das auf Deutsch?" : "Wie heißt das auf Englisch?", text: enDe ? k.en : k.de, optionen: opts, loesung: enDe ? k.de : k.en, textSprache: enDe ? "en" : "de", optionenSprache: enDe ? "de" : "en", englisch: k.en });
+        t.erklaerung = t.erklaerung || k.en + " = " + k.de;
+        break;
+      }
+      case "de-en-schreiben": {
+        const wort = k.en.replace(/^(to|a|an|the) /i, "");
+        Object.assign(t, { art: "schreiben", frage: "Schreib das englische Wort.", text: k.de, loesung: k.en, auch: k.auchEn || [], englisch: k.en, sprache: "en", textSprache: "de", anfang: wort.charAt(0) });
+        t.erklaerung = t.erklaerung || k.en + " = " + k.de;
+        break;
+      }
+      case "satz-wahl": {
+        const gap = satzLuecke(k);
+        // Falsche Wörter aus der anderen Wortart (Nomen gegen Verben), damit nur eine Lösung passt
+        const pool = k.satzFalsch || vokabelnFach(fach).filter((x) => x !== k && x.satz && istVerb(x) !== istVerb(k)).map(satzLuecke);
+        Object.assign(t, { art: "wahl", frage: "Welches Wort passt in die Lücke?", text: String(k.satz).replace(/\{[^}]+\}/, "___"), optionen: optionenMit(r, gap, pool, 4), loesung: gap, textSprache: "en", optionenSprache: "en", englisch: k.en });
+        t.erklaerung = t.erklaerung || String(k.satz).replace(/[{}]/g, "") + " (" + k.en + " = " + k.de + ")";
+        break;
+      }
       default: return null;
     }
     if (!t.tipp) t.tipp = standardTipp(t);
@@ -289,7 +342,7 @@
   }
   function standardTipp(t) {
     switch (t.art) {
-      case "schreiben": return "Es fängt mit «" + t.anfang.toUpperCase() + "» an.";
+      case "schreiben": return "Es fängt mit «" + (t.sprache === "en" ? t.anfang : t.anfang.toUpperCase()) + "» an." + (t.sprache === "en" ? " Achte genau auf jeden Buchstaben." : "");
       case "wahl": return "Streiche zuerst, was sicher nicht passt.";
       case "reihe": return "Was passiert ganz am Anfang? Fang dort an.";
       case "paare": return "Beginne mit dem Paar, bei dem du ganz sicher bist.";
@@ -308,7 +361,7 @@
       case "wahr": return { ok: a === t.loesung };
       case "tippen": return { ok: Number(a) === t.loesung };
       case "zahl": { const n = parseZahl(a); if (isNaN(n)) return { ok: false, leer: String(a || "").trim() === "" }; return { ok: Math.abs(n - t.loesung) <= (t.toleranz || 0) }; }
-      case "schreiben": return pruefeWort(a, t.loesung, { auch: t.auch, andere: t.andere, streng: t.streng });
+      case "schreiben": return t.sprache === "en" ? pruefeEnglisch(a, t.loesung, t.auch) : pruefeWort(a, t.loesung, { auch: t.auch, andere: t.andere, streng: t.streng });
       case "mehr": {
         const s = new Set(a || []); const L = new Set(t.loesung);
         const falsch = [...s].filter((x) => !L.has(x)); const fehlt = t.loesung.filter((x) => !s.has(x));
@@ -481,13 +534,13 @@
   function buildProbe(fach, s, opt) {
     const n = opt.n || 12;
     const r = R((opt.seed >>> 0) || 7);
-    const themen = fach.themen.map((t) => t.id);
+    const themen = planThemen(fach).map((t) => t.id);
     const out = [];
     const proThema = themen.map((th) => r.shuffle(fachTeile(fach).filter((t) => t.thema === th)));
     for (let i = 0; out.length < n && i < 200; i++) {
       const liste = proThema[i % themen.length]; if (!liste.length) continue;
       const t = liste.shift(); liste.push(t);
-      if (out.some((o) => o.teil === t.id) && out.length < fachTeile(fach).length) continue;
+      if (out.some((o) => o.teil === t.id) && out.length < fachTeile(fach).filter((x) => themen.includes(x.thema)).length) continue;
       const m = modi(t.karte); const modus = m[Math.min(m.length - 1, 1 + (r.f() < 0.4 ? 1 : 0))];
       out.push({ teil: t.id, modus, seed: r.seed() });
     }
@@ -593,7 +646,7 @@
   }
 
   const L = {
-    R, hash, mischeAnders, norm, klang, lev, kern, pruefeWort, parseZahl,
+    R, hash, mischeAnders, norm, klang, lev, kern, pruefeWort, pruefeEnglisch, parseZahl, planThemen, vokabelnFach, satzLuecke, istVerb,
     TYPEN, fachTeile, teilById, auftraege, auftragErledigt, modi, modusFuerStufe, makeTask, check, alleBegriffe, gruppenListe, kategorien,
     heuteISO, tageBis, plusTage, gueltigesDatum,
     defaults, migrate, record, teilStand, bereitschaft, wackelt, sterneFuer,

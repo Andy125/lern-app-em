@@ -209,6 +209,12 @@ label .eingabe { margin-top: 4px; }
 .lernkarte b { font-size: 21px; }
 .lernkarte ul, .lernkarte ol { margin: 6px 0; padding-left: 24px; }
 .legende { columns: 2; }
+table.vokabeln { width: 100%; border-collapse: collapse; font-size: 19px; }
+table.vokabeln th { text-align: left; color: var(--leise); font-size: 16px; padding: 4px 6px; }
+table.vokabeln td { padding: 6px; border-top: 1px solid var(--rand); vertical-align: middle; }
+table.vokabeln td:last-child { width: 52px; text-align: right; }
+table.vokabeln .vorlesen.klein { float: none; }
+.vorlesen.klein.inline { float: none; vertical-align: middle; margin-left: 8px; }
 .ergebnis-liste { width: 100%; max-width: 560px; }
 .ergebnis { display: grid; grid-template-columns: minmax(120px, 1fr) 2fr 64px; gap: 12px; align-items: center; margin: 8px 0; text-align: left; }
 

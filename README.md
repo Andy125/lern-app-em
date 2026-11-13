@@ -14,7 +14,7 @@ Oben rechts steht die Versionsnummer. So sieht man nach einem Update, ob die neu
 
 ## Was die App kann
 
-- **Tagesmission**: drei Etappen à 6 Aufgaben (Aufwärmen, Neues entdecken, Festigen), dazwischen 30 Sekunden Bewegung. Wer mittendrin aufhört, macht später mit der nächsten Etappe weiter. Danach gibt es Bonus-Runden ohne Limit.
+- **Tagesmission**: drei Etappen à 6 Aufgaben (Aufwärmen, Neues entdecken, Festigen), dazwischen 30 Sekunden Bewegung. Bei mehreren Fächern ist es eine gemeinsame Mission: Das Fach mit der nächsten Arbeit bekommt «Neues» und «Festigen», ein anderes Fach wird zum Aufwärmen wiederholt. In den zwei Tagen vor einer Arbeit gehört die ganze Mission diesem Fach. Wer mittendrin aufhört, macht später mit der nächsten Etappe weiter. Danach gibt es Bonus-Runden ohne Limit.
 - **Plan bis zur Arbeit**: Mit dem Datum der Arbeit verteilt die App die Themen auf die Tage. Zwei Tage vorher eine Probe-Arbeit, am Tag davor nur Wiederholen, am Tag selbst eine kurze Mutmacher-Runde.
 - **Aufgabenarten**: Auswahl, Stimmt/Stimmt nicht, mehrere antippen, Reihenfolge, Zuordnen, Lückentext mit Wortkasten, Begriff schreiben, Zahl eingeben, Bild beschriften und Stelle im Bild antippen.
 - **Hilfe in Stufen**: auf Wunsch ein Tipp; nach dem ersten Fehler ein Tipp, Richtiges bleibt stehen; nach dem zweiten Fehler die Lösung mit Erklärung und Merkhilfe. Die Aufgabe kommt in derselben Etappe noch einmal.
@@ -45,7 +45,7 @@ Der Spielstand liegt nur auf dem Gerät. Er wird mehrfach gesichert: Hauptspeich
 
 ## Inhalte schreiben
 
-Jedes Fach ist eine Datei `public/inhalte-<fach>.js`, zum Beispiel `public/inhalte-bio.js` (Biologie Klasse 5, Knochen, Hund und Katze). Sie wird in `public/index.html` vor `begleiter.js` eingebunden und in `public/sw.js` in `FILES` eingetragen. Gibt es mehrere Fächer, erscheinen oben Reiter.
+Jedes Fach ist eine Datei `public/inhalte-<fach>.js`, zum Beispiel `public/inhalte-bio.js` (Biologie Klasse 5, Knochen, Hund und Katze) und `public/inhalte-englisch.js` (Vokabeln). Sie wird in `public/index.html` vor `begleiter.js` eingebunden und in `public/sw.js` in `FILES` eingetragen. Gibt es mehrere Fächer, erscheinen oben Reiter.
 
 ```js
 (function (root) {
@@ -76,7 +76,12 @@ Kartentypen (jede Karte braucht eine eindeutige `id`; `tipp`, `erklaerung`, `mer
 | `reihe` | `titel`, `schritte` (in richtiger Reihenfolge) | Reihenfolge |
 | `luecke` | `text` mit `{Lücken}`, `extra` (falsche Wörter für den Wortkasten) | Lückentext |
 | `bild` | `titel`, `viewBox`, `svg`, `marken: [{ nr, x, y, begriff }]` | Nummer benennen, Stelle antippen, Begriff schreiben |
+| `vokabel` | `en`, `de`, `auchEn` (weitere richtige Schreibweisen), `satz` mit einer `{Lücke}`, `satzFalsch` | Englisch → Deutsch wählen, Deutsch → Englisch wählen, Englisch schreiben (streng), Lückensatz |
 | `auftrag` | `titel`, `text`, `art` (`basteln`, `forschen`, `bewegen`) | Mitmach-Auftrag unter «Forschen & Basteln», keine Quizfrage |
+
+Ein Thema mit `bonus: true` (zum Beispiel «Hunde-Englisch») gibt es beim freien Üben und in den Lernkarten, es zählt aber nicht für den Plan bis zur Arbeit und nicht für die Probe.
+
+Englische Vokabeln werden streng geprüft: Groß- und Kleinschreibung zählt, «to», «a», «an», «the» am Anfang dürfen fehlen. Beim Lückensatz stammen die falschen Wörter aus der anderen Wortart (Nomen gegen Verben, erkannt an «to»), damit nur eine Lösung passt; mit `satzFalsch` lassen sie sich selbst festlegen. Englische Wörter werden mit englischer Stimme vorgelesen.
 
 `{hund}` in Texten wird durch den Namen des Hundes zu Hause ersetzt (sonst «dein Hund»), `{hund3}` nach «von», «bei», «mit» (sonst «deinem Hund»). In Lösungen und Lücken sind Platzhalter nicht erlaubt. Für den Hund keine Fürwörter (er, sie) verwenden, damit jeder Satz mit und ohne Namen stimmt.
 

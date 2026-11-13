@@ -24,9 +24,9 @@ for (const fach of FAECHER) {
       ok(L.TYPEN.includes(k.typ) || k.typ === "auftrag", `${K}: Typ bekannt (${k.typ})`);
       if (k.typ === "auftrag") ok(k.titel && k.text && ["basteln", "forschen", "bewegen"].includes(k.art), `${K}: Auftrag mit Titel, Text und Art`);
       // Platzhalter für den Hundenamen nur in Texten, nie in Lösungen, Optionen oder Lücken
-      const loesungsFelder = JSON.stringify([k.begriff, k.antwort, k.falsch, k.paare, k.gruppen, k.schritte, k.text && k.typ === "luecke" ? k.text : "", k.marken, k.auch]);
+      const loesungsFelder = JSON.stringify([k.begriff, k.antwort, k.falsch, k.paare, k.gruppen, k.schritte, k.text && k.typ === "luecke" ? k.text : "", k.marken, k.auch, k.en, k.de, k.auchEn, k.typ === "vokabel" ? k.satz : ""]);
       ok(!/\{hund/.test(loesungsFelder), `${K}: {hund} nicht in Lösungen oder Lücken`);
-      ok(!/\{(?!hund3?\})[^}]*\}/.test(JSON.stringify([k.warum, k.merk, k.tipp, k.erklaerung, k.bedeutung, k.frage, k.satz, k.korrektur, k.titel, k.typ === "auftrag" ? k.text : ""])), `${K}: nur bekannte Platzhalter`);
+      ok(!/\{(?!hund3?\})[^}]*\}/.test(JSON.stringify([k.warum, k.merk, k.tipp, k.erklaerung, k.bedeutung, k.frage, k.typ === "vokabel" ? "" : k.satz, k.korrektur, k.titel, k.typ === "auftrag" ? k.text : ""])), `${K}: nur bekannte Platzhalter`);
       if (k.typ === "begriff") ok(k.begriff && k.bedeutung, `${K}: Begriff und Bedeutung`);
       if (k.typ === "frage") {
         ok(k.frage && k.antwort && Array.isArray(k.falsch) && k.falsch.length >= 2, `${K}: Frage, Antwort, mind. 2 falsche`);
@@ -50,6 +50,10 @@ for (const fach of FAECHER) {
         ok(luecken.length >= 1, `${K}: mind. eine Lücke`);
         ok(!(k.extra || []).some((x) => luecken.includes(x)), `${K}: Extra-Wörter sind keine Lösungen`);
       }
+      if (k.typ === "vokabel") {
+        ok(k.en && k.de, `${K}: Vokabel mit en und de`);
+        if (k.satz) ok((String(k.satz).match(/\{[^}]+\}/g) || []).length === 1, `${K}: Satz mit genau einer Lücke`);
+      }
       if (k.typ === "bild") {
         ok(k.svg && k.viewBox && k.marken.length >= 3, `${K}: Bild mit mind. 3 Marken`);
         ok(new Set(k.marken.map((m) => m.nr)).size === k.marken.length, `${K}: Nummern eindeutig`);
@@ -61,6 +65,10 @@ for (const fach of FAECHER) {
       }
     }
   }
+  const vok = fach.themen.flatMap((t) => t.karten).filter((k) => k.typ === "vokabel");
+  ok(new Set(vok.map((k) => k.en.toLowerCase())).size === vok.length, `${F}: englische Wörter eindeutig`);
+  ok(new Set(vok.map((k) => L.norm(k.de))).size === vok.length, `${F}: deutsche Bedeutungen eindeutig`);
+  ok(vok.length === 0 || vok.length >= 4, `${F}: 0 oder mind. 4 Vokabeln (für Auswahl)`);
   const begriffKarten = fach.themen.flatMap((t) => t.karten).filter((k) => k.typ === "begriff");
   ok(begriffKarten.length === 0 || begriffKarten.length >= 3, `${F}: 0 oder mind. 3 Begriffe (für Auswahl)`);
 }
@@ -80,6 +88,9 @@ function erwartet(fach, teil, modus, t) {
     case "bild-wahl": case "bild-schreiben": { const nr = Number((t.frage.match(/Nummer (\d+)/) || [])[1]); return k.marken.find((m) => m.nr === nr).begriff; }
     case "bild-tippen": { const b = t.frage.replace("Tippe auf: ", ""); return k.marken.find((m) => m.begriff === b).nr; }
     case "reihe": return k.schritte;
+    case "en-de-wahl": return k.de;
+    case "de-en-wahl": case "de-en-schreiben": return k.en;
+    case "satz-wahl": return (String(k.satz).match(/\{([^}]+)\}/) || [])[1];
     default: return undefined;
   }
 }
@@ -107,6 +118,13 @@ for (const fach of FAECHER) {
         // Keine falsche Option darf inhaltlich ebenfalls richtig sein
         if (modus === "paar-wahl") { const links = teil.karte.paare[teil.teil][0]; ok(t.optionen.filter((o) => teil.karte.paare.some((p) => p[0] === links && p[1] === o)).length === 1, `${T}: nur eine passende Gruppe`); }
         if (modus === "gruppe-wahl") { const x = t.text; ok(t.optionen.filter((g) => teil.karte.gruppen[g].includes(x)).length === 1, `${T}: Merkmal passt nur zu einer Gruppe`); }
+        if (modus === "satz-wahl") {
+          ok(t.text.includes("___") && !t.text.includes("{"), `${T}: Lückensatz mit Lücke`);
+          // falsche Optionen stammen aus der anderen Wortart, damit sie nicht auch passen
+          const vk = L.vokabelnFach(fach);
+          for (const o of t.optionen) if (o !== t.loesung) { const q = vk.find((x) => L.satzLuecke(x) === o); ok(!q || L.istVerb(q) !== L.istVerb(teil.karte), `${T}: «${o}» ist andere Wortart`); }
+        }
+        if (modus === "en-de-wahl" || modus === "de-en-wahl") ok(t.optionen.length === 4, `${T}: 4 Optionen`);
         if (modus === "begriff-wahl") ok(!t.optionen.some((o) => o !== t.loesung && L.norm(o) === L.norm(t.loesung)), `${T}: kein doppelter Begriff`);
         break;
       }
@@ -144,6 +162,12 @@ for (const fach of FAECHER) {
       case "schreiben": {
         const r = L.check(t, t.loesung);
         ok(r.ok && r.exakt, `${T}: genaue Schreibweise ist richtig und exakt`);
+        if (t.sprache === "en") {
+          ok(!L.check(t, t.loesung.slice(0, -1)).ok, `${T}: Englisch: ein Buchstabe fehlt ist falsch`);
+          ok(!L.check(t, "").ok, `${T}: leer ist nicht richtig`);
+          for (const v of L.vokabelnFach(fach)) if (v.en !== t.loesung) ok(!L.check(t, v.en).ok, `${T}: anderes Wort «${v.en}» falsch`);
+          break;
+        }
         ok(L.check(t, t.loesung.toLowerCase()).ok, `${T}: klein geschrieben erkennbar`);
         ok(!L.check(t, "").ok, `${T}: leer ist nicht richtig`);
         for (const b of begriffe) if (L.kern(b) !== L.kern(t.loesung) && !(t.auch || []).some((a) => L.kern(a) === L.kern(b))) ok(!L.check(t, b).ok, `${T}: anderer Begriff «${b}» wird nicht angenommen`);
@@ -183,6 +207,15 @@ ok(W("Blütenstaub", "Pollen", []).ok === false && L.pruefeWort("Blütenstaub", 
 for (const fach of FAECHER) {
   const b = L.alleBegriffe(fach);
   for (const z of b) for (const e of b) if (z !== e) ok(!W(e, z, b.filter((x) => x !== z)).ok, `${fach.id}: «${e}» gilt nicht als «${z}»`);
+}
+{
+  const E = L.pruefeEnglisch;
+  ok(E("dog", "dog").ok && E(" dog ", "dog").ok, "Englisch: genau richtig");
+  ok(!E("Dog", "dog").ok && E("Dog", "dog").grossKlein, "Englisch: Großschreibung zählt (englische Nomen klein)");
+  ok(E("bark", "to bark").ok && E("to bark", "to bark").ok && E("the dog", "dog").ok, "Englisch: to, a, the dürfen fehlen oder dabei sein");
+  ok(!E("dgo", "dog").ok && E("dgo", "dog").fast, "Englisch: Buchstabendreher ist falsch, aber fast");
+  ok(E("Good girl", "Good girl!").ok && E("leash", "lead", ["leash"]).ok, "Englisch: Satzzeichen egal, Alternativen zählen");
+  ok(!E("cat", "dog").ok && !E("", "dog").ok, "Englisch: anderes Wort und leer falsch");
 }
 ok(L.parseZahl("1.000") === 1000 && L.parseZahl("3,5") === 3.5 && L.parseZahl("12 500") === 12500 && isNaN(L.parseZahl("zwölf")), "Zahlen lesen");
 
