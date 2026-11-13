@@ -19,6 +19,7 @@ Die App läuft auf dem iPad eines Kindes. Ein Fehler, der den Spielstand löscht
    node tools/e2e-speicher.mjs
    node tools/e2e-geraete.mjs
    node tools/test-offline.mjs
+   node tools/test-update.mjs main   # Update über die veröffentlichte Version, Spielstand muss bleiben
    node tools/monkey.mjs 300 1
    ```
    Ohne Playwright-Browser: `CHROME_PATH=/pfad/zu/chrome` davor setzen.

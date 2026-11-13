@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "test": "node tools/test-logic.mjs && node tools/test-version.mjs",
-    "test:browser": "node tools/e2e.mjs && node tools/e2e-speicher.mjs && node tools/e2e-geraete.mjs && node tools/test-offline.mjs && node tools/monkey.mjs 300 1",
+    "test:browser": "node tools/e2e.mjs && node tools/e2e-speicher.mjs && node tools/e2e-geraete.mjs && node tools/test-offline.mjs && node tools/test-update.mjs && node tools/monkey.mjs 300 1",
     "icons": "node tools/make-icons.mjs"
   },
   "devDependencies": {

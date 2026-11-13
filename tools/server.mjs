@@ -6,7 +6,8 @@ import { PUBLIC } from "./lade.mjs";
 
 const TYPEN = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".png": "image/png", ".json": "application/json", ".webmanifest": "application/manifest+json", ".svg": "image/svg+xml" };
 
-export function starteServer(wurzel = PUBLIC) {
+export function starteServer(start = PUBLIC) {
+  let wurzel = start; // lässt sich umstellen, damit Tests ein Update auf derselben Adresse nachspielen können
   return new Promise((ok) => {
     const s = http.createServer((req, res) => {
       let p = decodeURIComponent(new URL(req.url, "http://x").pathname);
@@ -16,7 +17,7 @@ export function starteServer(wurzel = PUBLIC) {
       res.writeHead(200, { "Content-Type": TYPEN[path.extname(datei)] || "application/octet-stream", "Cache-Control": "no-cache" });
       fs.createReadStream(datei).pipe(res);
     });
-    s.listen(0, "127.0.0.1", () => ok({ url: `http://127.0.0.1:${s.address().port}/`, stop: () => new Promise((r) => s.close(r)) }));
+    s.listen(0, "127.0.0.1", () => ok({ url: `http://127.0.0.1:${s.address().port}/`, stop: () => new Promise((r) => s.close(r)), setWurzel: (w) => { wurzel = w; } }));
   });
 }
 
