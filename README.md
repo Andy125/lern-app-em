@@ -93,6 +93,7 @@ node tools/e2e.mjs [ordner]             # spielt die App wie ein Kind durch, opt
 node tools/e2e-speicher.mjs             # Spielstand: Neuladen, Kopie, IndexedDB, kaputter und alter Stand
 node tools/e2e-geraete.mjs [ordner]     # iPad hochkant, quer, Handy: Überlauf, Tippflächen, Schriftgröße
 node tools/test-offline.mjs             # startet ohne Internet
+node tools/test-update.mjs [ref]        # Update über die Vorgängerversion (Standard HEAD~1): Spielstand bleibt
 node tools/monkey.mjs 300 1             # zufälliges Durchklicken (Schritte, Startwert)
 node tools/make-icons.mjs [tierart]     # App-Icons neu zeichnen
 ```

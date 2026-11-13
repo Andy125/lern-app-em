@@ -17,6 +17,8 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2 # die Vorgängerversion für den Update-Test
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -37,6 +39,8 @@ jobs:
         run: node tools/e2e-geraete.mjs
       - name: Offline
         run: node tools/test-offline.mjs
+      - name: Update über die alte Version, Spielstand bleibt
+        run: node tools/test-update.mjs
       - name: Zufälliges Durchklicken
         run: node tools/monkey.mjs 300 1
   deploy:

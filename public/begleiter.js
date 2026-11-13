@@ -4,12 +4,53 @@
 
   const ARTEN = {
     hund: {
-      name: "Hund", farbe: "#c8773f", bauch: "#e2a66c", dunkel: "#97521f", innen: "#e7b9a0", nase: 9,
-      ohren: () => "",
-      // Labrador: weiche Hängeohren, kräftiger Otterschwanz, Foxred
-      ohrenVorne: (A) => `<path d="M60 52 Q40 60 42 98 Q46 116 60 112 Q72 92 74 62 Z" fill="${A.dunkel}"/><path d="M140 52 Q160 60 158 98 Q154 116 140 112 Q128 92 126 62 Z" fill="${A.dunkel}"/>`,
-      schwanz: (A) => `<path class="wedel" d="M144 166 Q176 160 180 128" stroke="${A.farbe}" stroke-width="15" fill="none" stroke-linecap="round"/>`,
-      gesicht: (A) => `<ellipse cx="100" cy="106" rx="25" ry="17" fill="${A.bauch}"/>`,
+      // Labrador-Welpe in Foxred, etwas naturgetreuer gezeichnet: breiter Kopf, Schnauze mit großer schwarzer Nase,
+      // weiche Hängeohren, hellere Brust, kräftige Pfoten
+      name: "Hund", farbe: "#b8622a", bauch: "#d99a5c", dunkel: "#94491b", hell: "#cf8346", nase: 9,
+      zeichne: (A, mood) => {
+        const fell = "url(#ln-hund-fell)", kopf = "url(#ln-hund-kopf)", ohr = "url(#ln-hund-ohr)";
+        let s = `<defs>
+          <radialGradient id="ln-hund-kopf" cx="50%" cy="30%" r="70%"><stop offset="0" stop-color="${A.hell}"/><stop offset=".55" stop-color="${A.farbe}"/><stop offset="1" stop-color="${A.dunkel}"/></radialGradient>
+          <radialGradient id="ln-hund-fell" cx="50%" cy="35%" r="75%"><stop offset="0" stop-color="${A.hell}"/><stop offset=".6" stop-color="${A.farbe}"/><stop offset="1" stop-color="${A.dunkel}"/></radialGradient>
+          <linearGradient id="ln-hund-ohr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${A.farbe}"/><stop offset="1" stop-color="${A.dunkel}"/></linearGradient>
+          <radialGradient id="ln-hund-brust" cx="50%" cy="35%" r="60%"><stop offset="0" stop-color="${A.bauch}"/><stop offset=".55" stop-color="${A.bauch}" stop-opacity=".8"/><stop offset="1" stop-color="${A.bauch}" stop-opacity="0"/></radialGradient>
+        </defs>`;
+        // Schwanz, Hinterbeine, Körper
+        s += `<path class="wedel" d="M140 178 Q184 182 180 148" stroke="${A.farbe}" stroke-width="13" fill="none" stroke-linecap="round"/>`;
+        s += `<ellipse cx="64" cy="168" rx="27" ry="23" fill="${fell}"/><ellipse cx="136" cy="168" rx="27" ry="23" fill="${fell}"/>`;
+        s += `<ellipse cx="50" cy="190" rx="16" ry="7" fill="${A.farbe}"/><ellipse cx="150" cy="190" rx="16" ry="7" fill="${A.farbe}"/>`;
+        s += `<path d="M62 126 Q54 176 74 192 L126 192 Q146 176 138 126 Q120 110 100 110 Q80 110 62 126 Z" fill="${fell}"/>`;
+        s += `<ellipse cx="100" cy="140" rx="30" ry="30" fill="url(#ln-hund-brust)"/>`;
+        // Vorderbeine mit großen Welpenpfoten
+        s += `<path d="M77 136 Q74 166 76 188 L95 188 Q97 164 95 136 Z" fill="${A.farbe}"/><path d="M105 136 Q103 164 105 188 L124 188 Q126 166 123 136 Z" fill="${A.farbe}"/>`;
+        s += `<path d="M82 140 Q80 164 82 184" stroke="${A.hell}" stroke-width="4" fill="none" stroke-linecap="round" opacity=".6"/><path d="M110 140 Q108 164 110 184" stroke="${A.hell}" stroke-width="4" fill="none" stroke-linecap="round" opacity=".6"/>`;
+        s += `<ellipse cx="85" cy="190" rx="14" ry="8" fill="${A.hell}"/><ellipse cx="115" cy="190" rx="14" ry="8" fill="${A.hell}"/>`;
+        s += `<path d="M80 186 L80 193 M85 185 L85 194 M90 186 L90 193 M110 186 L110 193 M115 185 L115 194 M120 186 L120 193" stroke="${A.dunkel}" stroke-width="1.6" stroke-linecap="round" opacity=".7"/>`;
+        // Kopf
+        s += `<path d="M54 78 Q52 38 100 34 Q148 38 146 78 Q146 106 128 118 Q116 126 100 126 Q84 126 72 118 Q54 106 54 78 Z" fill="${kopf}"/>`;
+        s += `<path d="M92 44 Q100 40 108 44" stroke="${A.dunkel}" stroke-width="2" fill="none" opacity=".35"/>`;
+        // Schnauze mit hellerem Nasenrücken
+        s += `<path d="M79 98 Q78 82 100 80 Q122 82 121 98 Q122 118 100 124 Q78 118 79 98 Z" fill="${A.farbe}"/>`;
+        s += `<ellipse cx="100" cy="86" rx="9" ry="14" fill="${A.hell}" opacity=".55"/>`;
+        s += `<path d="M84 112 Q100 122 116 112" stroke="${A.dunkel}" stroke-width="5" fill="none" opacity=".25" stroke-linecap="round"/>`;
+        // Augen: dunkelbraun, mandelförmig, mit Lichtpunkt und leichtem Brauenschatten
+        if (mood === "jubel" || mood === "mampf") s += `<path d="M73 84 Q82 75 91 84 M109 84 Q118 75 127 84" stroke="#2a1a12" stroke-width="4" fill="none" stroke-linecap="round"/>`;
+        else s += `<path d="M71 75 Q81 69 90 75 M110 75 Q119 69 129 75" stroke="${A.dunkel}" stroke-width="3" fill="none" opacity=".55" stroke-linecap="round"/>`
+          + `<ellipse class="auge" cx="82" cy="83" rx="7.5" ry="7" fill="#3b2316"/><ellipse class="auge" cx="118" cy="83" rx="7.5" ry="7" fill="#3b2316"/>`
+          + `<circle cx="82" cy="83.5" r="4.6" fill="#140b07"/><circle cx="118" cy="83.5" r="4.6" fill="#140b07"/><circle cx="84.5" cy="80.5" r="2.1" fill="#fff"/><circle cx="120.5" cy="80.5" r="2.1" fill="#fff"/>`;
+        // Nase: groß, schwarz, mit Glanz
+        s += `<path d="M87 96 Q100 89 113 96 Q114 106 100 109 Q86 106 87 96 Z" fill="#231a17"/><ellipse cx="96" cy="95" rx="4.5" ry="2" fill="#fff" opacity=".35"/>`;
+        s += `<ellipse cx="94" cy="101" rx="2.2" ry="1.6" fill="#000" opacity=".6"/><ellipse cx="106" cy="101" rx="2.2" ry="1.6" fill="#000" opacity=".6"/>`;
+        // Maul
+        if (mood === "jubel") s += `<path d="M86 112 Q100 130 114 112 Q100 117 86 112 Z" fill="#6b2a22"/><path d="M93 117 Q100 134 107 117 Z" fill="#e9858a"/>`;
+        else if (mood === "mampf") s += `<ellipse class="kau" cx="100" cy="116" rx="8" ry="5" fill="#6b2a22"/>`;
+        else s += `<path d="M100 109 L100 113 M100 113 Q93 119 87 114 M100 113 Q107 119 113 114" stroke="#3a1f14" stroke-width="2.4" fill="none" stroke-linecap="round"/>`;
+        s += [[88, 107], [85, 103], [112, 107], [115, 103]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1.1" fill="#3a1f14" opacity=".7"/>`).join("");
+        // Hängeohren vor dem Kopf
+        s += `<path d="M64 50 Q44 54 40 80 Q37 106 51 115 Q63 110 69 90 Q74 64 64 50 Z" fill="${ohr}"/>`;
+        s += `<path d="M136 50 Q156 54 160 80 Q163 106 149 115 Q137 110 131 90 Q126 64 136 50 Z" fill="${ohr}"/>`;
+        return s;
+      },
     },
     katze: {
       name: "Katze", farbe: "#f2a65a", bauch: "#fde3c3", dunkel: "#d9853b", innen: "#f7b7b2",
@@ -75,7 +116,10 @@
     const mood = o.mood || "froh";
     const st = Math.max(0, Math.min(3, o.stufe || 0));
     const sc = GROESSE[st];
-    let s = A.schwanz(A);
+    let s = "";
+    if (A.zeichne) s = A.zeichne(A, mood);
+    else {
+    s += A.schwanz(A);
     s += `<ellipse cx="100" cy="150" rx="50" ry="40" fill="${A.farbe}"/><ellipse cx="100" cy="158" rx="31" ry="27" fill="${A.bauch}"/>`;
     s += `<ellipse cx="78" cy="187" rx="16" ry="9" fill="${A.dunkel}"/><ellipse cx="122" cy="187" rx="16" ry="9" fill="${A.dunkel}"/>`;
     s += A.ohren(A);
@@ -88,6 +132,7 @@
     s += mund(mood);
     const arm = A.arme || A.farbe;
     s += `<ellipse cx="70" cy="146" rx="11" ry="16" fill="${arm}" transform="rotate(24 70 146)"/><ellipse cx="130" cy="146" rx="11" ry="16" fill="${arm}" transform="rotate(-24 130 146)"/>`;
+    }
     for (const z of ZUBEHOER_REIHE) if ((o.traegt || []).includes(z)) s += ZUBEHOER[z];
     if (st === 3) s += `<g class="glanz"><path d="M26 60 l4 10 l10 4 l-10 4 l-4 10 l-4 -10 l-10 -4 l10 -4 Z" fill="#f2c94c"/><path d="M172 40 l3 7 l7 3 l-7 3 l-3 7 l-3 -7 l-7 -3 l7 -3 Z" fill="#f2c94c"/></g>`;
     const g = `<g transform="translate(100 196) scale(${sc}) translate(-100 -196)">${s}</g>`;
