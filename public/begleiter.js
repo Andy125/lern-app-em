@@ -104,10 +104,11 @@
     muetze: `<path d="M58 60 Q60 22 100 20 Q140 22 142 60 Z" fill="#457b9d"/><path d="M100 56 Q140 50 166 62 Q140 70 100 64 Z" fill="#2f5d7c"/><circle cx="100" cy="20" r="6" fill="#f2c94c"/>`,
     schleife: `<g transform="translate(134 44) rotate(20)"><polygon points="0,0 -18,-11 -18,11" fill="#e84a7a"/><polygon points="0,0 18,-11 18,11" fill="#e84a7a"/><circle r="5" fill="#c2185b"/></g>`,
     blume: `<g transform="translate(62 48)"><circle cx="0" cy="-9" r="6.5" fill="#fff"/><circle cx="8.5" cy="-3" r="6.5" fill="#fff"/><circle cx="5.5" cy="7.5" r="6.5" fill="#fff"/><circle cx="-5.5" cy="7.5" r="6.5" fill="#fff"/><circle cx="-8.5" cy="-3" r="6.5" fill="#fff"/><circle r="5" fill="#f2c94c"/></g>`,
+    halsband: `<path d="M66 121 Q100 137 134 121 L133 129 Q100 146 67 129 Z" fill="#2a6fdb" stroke="#1d4f9e" stroke-width="1.5"/><circle cx="100" cy="141" r="5.5" fill="#f2c94c" stroke="#c9a227" stroke-width="1.5"/>`,
     krone: `<path d="M74 34 L78 10 L90 26 L100 6 L110 26 L122 10 L126 34 Z" fill="#f2c94c" stroke="#d4a017" stroke-width="2"/><circle cx="100" cy="24" r="3.5" fill="#e63946"/>`,
   };
   // Reihenfolge beim Zeichnen: Halstuch unten, Krone ganz oben
-  const ZUBEHOER_REIHE = ["halstuch", "brille", "muetze", "schleife", "blume", "krone"];
+  const ZUBEHOER_REIHE = ["halsband", "halstuch", "brille", "muetze", "schleife", "blume", "krone"];
   const GROESSE = [0.78, 0.88, 1, 1];
 
   function tierSvg(art, o) {
@@ -150,9 +151,22 @@
     pflanze: `<path d="M22 196 L58 196 L52 232 L28 232 Z" fill="#c1693c"/><path d="M40 196 Q20 160 30 140 Q44 166 40 196 M40 196 Q56 158 70 150 Q62 178 40 196 M40 196 Q40 160 46 128 Q54 164 40 196" fill="#4f9d69"/>`,
     lampe: `<line x1="368" y1="120" x2="368" y2="232" stroke="#6d5d4b" stroke-width="5"/><ellipse cx="368" cy="234" rx="16" ry="5" fill="#6d5d4b"/><path d="M346 120 L390 120 L380 92 L356 92 Z" fill="#ffd166"/><ellipse class="lampenlicht" cx="368" cy="150" rx="40" ry="60" fill="#fff3b0" opacity=".25"/>`,
     bastel: `<rect x="70" y="196" width="66" height="7" rx="2" fill="#a1887f"/><rect x="74" y="203" width="5" height="32" fill="#8d6e63"/><rect x="127" y="203" width="5" height="32" fill="#8d6e63"/><circle cx="82" cy="190" r="6" fill="#f4a261"/><circle cx="82" cy="190" r="2.2" fill="#a1887f"/><path d="M93 196 L109 196 L101 182 Z" fill="#f9c74f"/><circle cx="101" cy="191" r="1.8" fill="#e63946"/><circle cx="98" cy="194" r="1.5" fill="#e63946"/><rect x="114" y="187" width="15" height="9" rx="4" fill="#90be6d"/><rect x="114" y="187" width="15" height="3" rx="1.5" fill="#f8bbd0"/>`,
+    decke: `<path d="M100 222 Q200 206 300 222 L310 252 Q200 266 90 252 Z" fill="#6f9fc0"/><path d="M130 216 L122 258 M170 211 L166 262 M210 210 L212 263 M250 212 L256 262 M286 218 L296 256" stroke="#a9c9de" stroke-width="5" opacity=".7"/><path d="M96 236 Q200 222 304 236" stroke="#a9c9de" stroke-width="5" fill="none" opacity=".7"/>`,
+    korb: `<ellipse cx="200" cy="216" rx="90" ry="18" fill="#7a4a22"/><ellipse cx="200" cy="222" rx="80" ry="14" fill="#efd3a8"/>`,
+    leine: `<rect x="141" y="40" width="10" height="6" rx="2" fill="#6d5d4b"/><path d="M146 46 Q132 78 146 110" stroke="#c0392b" stroke-width="4" fill="none" stroke-linecap="round"/><path d="M146 46 Q160 78 146 110" stroke="#c0392b" stroke-width="4" fill="none" stroke-linecap="round"/><rect x="142" y="108" width="8" height="10" rx="2" fill="#b0b0b0"/>`,
     ball: `<circle cx="318" cy="232" r="14" fill="#ef476f"/><path d="M304 232 Q318 222 332 232 M318 218 L318 246" stroke="#fff" stroke-width="3" fill="none"/>`,
   };
-  const ZIMMER_REIHE = ["lichter", "bild", "regal", "teppich", "kissen", "pflanze", "bastel", "lampe", "ball"];
+  const ZIMMER_REIHE = ["lichter", "bild", "regal", "leine", "teppich", "decke", "korb", "kissen", "pflanze", "bastel", "lampe"];
+  const VORNE = {
+    korb: `<path d="M110 222 Q200 244 290 222 L284 248 Q200 264 116 248 Z" fill="#a8692f"/><path d="M118 232 Q200 250 282 232 M120 241 Q200 258 280 241" stroke="#7a4a22" stroke-width="2" fill="none"/><path d="M140 232 L138 254 M170 238 L169 259 M200 240 L200 261 M230 238 L231 259 M260 232 L262 254" stroke="#7a4a22" stroke-width="1.6"/>`,
+    napf: `<path d="M296 238 L322 238 L318 252 L300 252 Z" fill="#2e86c1"/><ellipse cx="309" cy="238" rx="13" ry="4" fill="#aed6f1"/><path d="M326 238 L352 238 L348 252 L330 252 Z" fill="#c0392b"/><ellipse cx="339" cy="238" rx="13" ry="4" fill="#8d5524"/><circle cx="335" cy="237" r="1.6" fill="#5d3a1a"/><circle cx="341" cy="238" r="1.6" fill="#5d3a1a"/><circle cx="338" cy="236" r="1.4" fill="#5d3a1a"/>`,
+    ball: `<circle cx="262" cy="248" r="11" fill="#ef476f"/><path d="M251 248 Q262 240 273 248 M262 237 L262 259" stroke="#fff" stroke-width="2.5" fill="none"/>`,
+    kauseil: `<path d="M88 248 Q110 236 132 248" stroke="#e9d8a6" stroke-width="7" fill="none" stroke-linecap="round"/><path d="M92 246 L98 241 M104 242 L110 238 M116 241 L122 240 M126 244 L130 246" stroke="#c0392b" stroke-width="2.5"/><circle cx="88" cy="248" r="5.5" fill="#d4a373"/><circle cx="132" cy="248" r="5.5" fill="#d4a373"/>`,
+    ente: `<ellipse cx="62" cy="248" rx="13" ry="8" fill="#f9d423"/><circle cx="70" cy="238" r="7" fill="#f9d423"/><path d="M76 238 L84 240 L76 242 Z" fill="#f39c12"/><circle cx="72" cy="236" r="1.4" fill="#222"/>`,
+    frisbee: `<ellipse cx="170" cy="254" rx="19" ry="5.5" fill="#e74c3c"/><ellipse cx="170" cy="253" rx="11" ry="3" fill="none" stroke="#f5b7b1" stroke-width="2"/>`,
+    kuscheltier: `<ellipse cx="280" cy="226" rx="11" ry="10" fill="#c9a07a"/><circle cx="280" cy="210" r="8" fill="#c9a07a"/><circle cx="273" cy="203" r="3.5" fill="#c9a07a"/><circle cx="287" cy="203" r="3.5" fill="#c9a07a"/><ellipse cx="280" cy="213" rx="3.5" ry="2.5" fill="#e8d5c0"/><circle cx="277" cy="208" r="1.2" fill="#222"/><circle cx="283" cy="208" r="1.2" fill="#222"/>`,
+  };
+  const VORNE_REIHE = ["korb", "kuscheltier", "napf", "kauseil", "ente", "frisbee", "ball"];
 
   function zimmerSvg(art, o) {
     o = o || {};
@@ -164,8 +178,27 @@
     for (const z of ZIMMER_REIHE) if (besitz.includes(z)) s += ZIMMER[z];
     const tier = tierSvg(art, { mood: o.mood, stufe: o.stufe, traegt: o.traegt, nurInhalt: true });
     s += `<g class="tier-im-zimmer" transform="translate(115 66) scale(0.85)">${tier}</g>`;
+    for (const z of VORNE_REIHE) if (besitz.includes(z)) s += VORNE[z];
     return `<svg class="zimmer-svg" viewBox="0 0 400 260" role="img" aria-label="Zimmer">${s}</svg>`;
   }
 
-  root.LN_TIER = { ARTEN, tierSvg, zimmerSvg, ZUBEHOER: Object.keys(ZUBEHOER), ZIMMER: Object.keys(ZIMMER) };
+  // Bilder für den Laden: Zimmersachen als Ausschnitt ihrer Zeichnung, Futter eigens gezeichnet
+  const AUSSCHNITT = { korb: "104 196 192 70", decke: "88 202 226 66", napf: "292 228 64 28", ball: "248 234 28 28", kauseil: "80 232 60 26", ente: "46 228 42 30", frisbee: "148 244 44 16", kuscheltier: "264 196 32 40", leine: "126 36 40 86" };
+  const FUTTER = {
+    wasser: `<path d="M5 20 L35 20 L31 33 L9 33 Z" fill="#2e86c1"/><ellipse cx="20" cy="20" rx="15" ry="4.5" fill="#aed6f1"/><path d="M20 5 Q26 13 20 16 Q14 13 20 5 Z" fill="#5dade2"/>`,
+    futter: `<path d="M5 22 L35 22 L31 34 L9 34 Z" fill="#c0392b"/><ellipse cx="20" cy="22" rx="15" ry="4.5" fill="#8d5524"/>` + [[13, 19], [18, 17], [23, 19], [27, 18], [16, 21], [22, 21]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="2.6" fill="#a0522d" stroke="#5d3a1a" stroke-width=".8"/>`).join(""),
+    leckerli: `<rect x="8" y="14" width="24" height="12" rx="6" fill="#a0522d" transform="rotate(-20 20 20)"/><path d="M12 22 L28 16" stroke="#d98c5f" stroke-width="2" transform="rotate(0)"/>`,
+    hundekeks: `<path d="M9 14 a4 4 0 1 1 5 -4 L26 10 a4 4 0 1 1 5 4 a4 4 0 1 1 -5 4 L14 18 a4 4 0 1 1 -5 -4 Z" fill="#deb887" stroke="#a0784d" stroke-width="1.2" transform="translate(0 8)"/><circle cx="16" cy="22" r="1" fill="#a0784d"/><circle cx="21" cy="21" r="1" fill="#a0784d"/><circle cx="25" cy="23" r="1" fill="#a0784d"/>`,
+    kauknochen: `<g transform="rotate(-25 20 20)"><rect x="10" y="17" width="20" height="6" fill="#fbf6ea" stroke="#c9b99a" stroke-width="1"/><circle cx="9" cy="16" r="4.5" fill="#fbf6ea" stroke="#c9b99a"/><circle cx="9" cy="24" r="4.5" fill="#fbf6ea" stroke="#c9b99a"/><circle cx="31" cy="16" r="4.5" fill="#fbf6ea" stroke="#c9b99a"/><circle cx="31" cy="24" r="4.5" fill="#fbf6ea" stroke="#c9b99a"/><rect x="10" y="17.5" width="20" height="5" fill="#fbf6ea"/></g>`,
+    kaustange: `<g transform="rotate(-35 20 20)"><rect x="6" y="16" width="28" height="8" rx="4" fill="#b5651d"/><path d="M10 16 L14 24 M16 16 L20 24 M22 16 L26 24 M28 16 L31 22" stroke="#7b3f00" stroke-width="1.6"/></g>`,
+  };
+  function ladenIcon(id) {
+    if (FUTTER[id]) return `<svg class="laden-bild" viewBox="0 0 40 40" aria-hidden="true">${FUTTER[id]}</svg>`;
+    if (AUSSCHNITT[id]) return `<svg class="laden-bild" viewBox="${AUSSCHNITT[id]}" aria-hidden="true">${ZIMMER[id] || ""}${VORNE[id] || ""}</svg>`;
+    return "";
+  }
+  // Goldene Münze (statt Emoji, das ältere iPads nicht kennen)
+  const muenze = () => `<svg class="muenze" viewBox="0 0 24 24" aria-hidden="true"><defs><radialGradient id="ln-gold" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#fff6c2"/><stop offset=".45" stop-color="#f6c744"/><stop offset="1" stop-color="#c98b0b"/></radialGradient></defs><circle cx="12" cy="12" r="11" fill="url(#ln-gold)" stroke="#a87405" stroke-width="1.2"/><circle cx="12" cy="12" r="7.6" fill="none" stroke="#d9a21b" stroke-width="1.2"/><g fill="#b07c08"><ellipse cx="12" cy="14.2" rx="3" ry="2.4"/><circle cx="8.6" cy="10.6" r="1.3"/><circle cx="10.8" cy="8.9" r="1.3"/><circle cx="13.2" cy="8.9" r="1.3"/><circle cx="15.4" cy="10.6" r="1.3"/></g></svg>`;
+
+  root.LN_TIER = { ARTEN, tierSvg, zimmerSvg, ladenIcon, muenze, ZUBEHOER: Object.keys(ZUBEHOER), ZIMMER: Object.keys(ZIMMER).concat(Object.keys(VORNE).filter((k) => !ZIMMER[k])) };
 })(typeof window !== "undefined" ? window : globalThis);

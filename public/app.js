@@ -62,18 +62,17 @@
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
     fertig();
   }
+  function sicherungAusText(text) {
+    const o = JSON.parse(String(text).trim());
+    const st = o && o.app === "lernnest" && o.stand && typeof o.stand === "object" ? o.stand : null;
+    if (!st) throw new Error("keine Sicherung");
+    try { localStorage.setItem(VOR, JSON.stringify(S)); } catch (e) { /* egal */ }
+    S = L.migrate(st); speichern(); idbSchreiben(JSON.stringify(S));
+    ui = startUi(); render(); toast("Sicherung geladen.");
+  }
   function sicherungLaden(file) {
     const r = new FileReader();
-    r.onload = () => {
-      try {
-        const o = JSON.parse(r.result);
-        const st = o && o.app === "lernnest" && o.stand && typeof o.stand === "object" ? o.stand : null;
-        if (!st) throw new Error("keine Sicherung");
-        try { localStorage.setItem(VOR, JSON.stringify(S)); } catch (e) { /* egal */ }
-        S = L.migrate(st); speichern(); idbSchreiben(JSON.stringify(S));
-        ui = startUi(); render(); toast("Sicherung geladen.");
-      } catch (e) { toast("Diese Datei ist keine Lernnest-Sicherung."); }
-    };
+    r.onload = () => { try { sicherungAusText(r.result); } catch (e) { toast("Diese Datei ist keine Lernnest-Sicherung."); } };
     r.readAsText(file);
   }
 
@@ -228,7 +227,7 @@
     const tabs = FAECHER.length > 1 && ui.ansicht === "start"
       ? `<nav class="faecher">${FAECHER.map((f) => `<button class="fach-tab${f === fach() ? " aktiv" : ""}" data-act="fach" data-arg="${esc(f.id)}">${esc(f.icon)} ${esc(f.kurz || f.name)}</button>`).join("")}</nav>`
       : `<h1 class="titel">${zurueck ? `<button class="zurueck" data-act="heim" aria-label="Zurück">‹</button>` : ""}${esc(titel || "Lernnest")}</h1>`;
-    return `<header class="kopf">${tabs}<div class="muenzen" aria-label="${S.muenzen} Münzen">🪙 <b>${S.muenzen}</b></div></header>`;
+    return `<header class="kopf">${tabs}<div class="muenzen" aria-label="${S.muenzen} Münzen">${TIER.muenze()} <b>${S.muenzen}</b></div></header>`;
   }
 
   // ================= Willkommen =================
@@ -297,7 +296,7 @@
       </section>
       <footer class="fuss">
         <span>${tageWoche ? `Diese Woche an ${tageWoche} ${tageWoche === 1 ? "Tag" : "Tagen"} geübt` : "Schön, dass du da bist!"}</span>
-        <button id="eltern-knopf" class="eltern-knopf" aria-label="Für Eltern: gedrückt halten"><span class="fuell"></span>Für Eltern: gedrückt halten</button>
+        <button id="eltern-knopf" class="eltern-knopf" type="button" aria-label="Für Eltern: gedrückt halten"><span class="fuell"></span><span class="text">Für Eltern: gedrückt halten</span></button>
       </footer></main>`;
   }
 
@@ -402,7 +401,7 @@
       <button class="zurueck" data-act="pause-runde" aria-label="Pause, zurück zur Startseite">✕</button>
       <div class="runde-info"><div class="runde-titel">${esc(titel)}</div><div class="fortschritt" aria-label="Aufgabe ${R.i + 1} von ${R.specs.length}">${dots}</div></div>
       <div class="mini-tier ${R.status === "richtig" && !S.einst.ruhig ? (R.serie >= 5 && R.serie % 5 === 0 ? "salto" : "huepf") : ""}">${TIER.tierSvg(S.tier.art, { mood, stufe: L.stufe(S.punkte), traegt: S.traegt })}</div>
-      <div class="muenzen">🪙 <b>${S.muenzen}</b></div></header>`;
+      <div class="muenzen">${TIER.muenze()} <b>${S.muenzen}</b></div></header>`;
   }
 
   // ---------- Bild mit Nummern ----------
@@ -657,7 +656,7 @@
         return `<h2>${esc(th.icon || "")} ${esc(th.name)}</h2>` + a.map((k) => {
           const am = S.auftraege[k.id];
           return `<article class="auftrag${am ? " erledigt" : ""}"><div class="auftrag-icon">${AUFTRAG_ICON[k.art] || "⭐"}</div><div><h3>${esc(k.titel)}</h3><p>${esc(k.text)}</p>
-            ${am ? `<p class="leise">✓ Geschafft am ${new Date(am + "T12:00:00").toLocaleDateString("de-DE")}</p>` : `<button class="btn haupt" data-act="auftrag-fertig" data-arg="${esc(k.id)}">Geschafft! +${L.LOHN.auftrag} 🪙</button>`}</div></article>`;
+            ${am ? `<p class="leise">✓ Geschafft am ${new Date(am + "T12:00:00").toLocaleDateString("de-DE")}</p>` : `<button class="btn haupt" data-act="auftrag-fertig" data-arg="${esc(k.id)}">Geschafft! +${L.LOHN.auftrag} ${TIER.muenze()}</button>`}</div></article>`;
         }).join("");
       }).join("")}</main>`;
   }
@@ -733,7 +732,10 @@
   // ================= Tier =================
   function tierSeite() {
     const reiter = ui.reiter || "futter";
-    const liste = reiter === "futter" ? L.SHOP.snacks : reiter === "zubehoer" ? L.SHOP.zubehoer : L.SHOP.zimmer;
+    const angebot = L.laden(S.tier.art);
+    let liste = reiter === "futter" ? angebot.snacks : reiter === "zubehoer" ? angebot.zubehoer : angebot.zimmer;
+    // schon gekaufte Dinge aus früheren Versionen bleiben sichtbar
+    if (reiter === "zimmer") liste = liste.concat(S.besitz.map(L.shopDing).filter((d) => d && !liste.some((x) => x.id === d.id) && !L.SHOP.zubehoer.some((x) => x.id === d.id)));
     const st = L.stufe(S.punkte), naechste = L.STUFEN[st + 1];
     return `${kopf(tierName(), true)}<main class="tier-seite">
       <section class="zimmer-box gross${ui.mood ? " " + ui.mood : ""}" data-act="streicheln" aria-label="${esc(tierName())} streicheln">
@@ -743,14 +745,15 @@
       </section>
       <p class="leise mitte-text">${esc(tierName())} ist ${L.STUFEN[st].name === "Baby" ? (S.tier.art === "hund" ? "noch ein Welpe" : "noch ein Baby") : L.STUFEN[st].name === "Held" ? "ein echter Held" : L.STUFEN[st].name.toLowerCase()}. ${naechste ? `Noch ${naechste.ab - S.punkte} Punkte, dann wächst ${esc(tierName())}.` : ""}</p>
       <nav class="reiter">
-        <button class="${reiter === "futter" ? "aktiv" : ""}" data-act="tier-reiter" data-arg="futter">🍎 Füttern</button>
+        <button class="${reiter === "futter" ? "aktiv" : ""}" data-act="tier-reiter" data-arg="futter">${S.tier.art === "hund" ? "🦴" : "🍎"} Füttern</button>
         <button class="${reiter === "zubehoer" ? "aktiv" : ""}" data-act="tier-reiter" data-arg="zubehoer">🎀 Anziehen</button>
         <button class="${reiter === "zimmer" ? "aktiv" : ""}" data-act="tier-reiter" data-arg="zimmer">🛋️ Zimmer</button>
       </nav>
       <div class="laden">${liste.map((d) => {
         const hat = S.besitz.includes(d.id), an = S.traegt.includes(d.id);
-        const unter = reiter === "futter" ? `${d.preis} 🪙` : hat ? (reiter === "zubehoer" ? (an ? "trägt es" : "ablegen") : "im Zimmer") : `${d.preis} 🪙`;
-        return `<button class="laden-ding${hat ? " hat" : ""}${an ? " an" : ""}${!hat && S.muenzen < d.preis ? " teuer" : ""}" data-act="kaufen" data-arg="${d.id}" ${reiter === "zimmer" && hat ? "disabled" : ""}><span class="icon">${d.icon}</span><span>${esc(d.name)}</span><small>${unter}</small></button>`;
+        const preis = `<span class="preis">${d.preis} ${TIER.muenze()}</span>`;
+        const unter = reiter === "futter" ? preis : hat ? (reiter === "zubehoer" ? (an ? "trägt es" : "ablegen") : "im Zimmer") : preis;
+        return `<button class="laden-ding${hat ? " hat" : ""}${an ? " an" : ""}${!hat && S.muenzen < d.preis ? " teuer" : ""}" data-act="kaufen" data-arg="${d.id}" ${reiter === "zimmer" && hat ? "disabled" : ""}><span class="icon">${TIER.ladenIcon(d.id) || d.icon}</span><span>${esc(d.name)}</span><small>${unter}</small></button>`;
       }).join("")}</div></main>`;
   }
   let moodTimer = null;
@@ -819,6 +822,12 @@
         <p>Der Spielstand liegt auf diesem iPad und wird dort doppelt gespeichert (zwei Kopien im Browser und eine in der Datenbank des Browsers). Speichern Sie trotzdem ab und zu eine Sicherungsdatei, am besten in «Dateien» oder iCloud. Mit «Sicherung laden» kommt alles zurück, auch auf einem anderen Gerät.</p>
         <p class="leise">Letzte Sicherungsdatei: ${esc(lb)}</p>
         <div class="knopfzeile"><button class="btn haupt" data-act="sicherung">Sicherung speichern</button><label class="btn" for="sicherung-datei" role="button" tabindex="0">Sicherung laden</label><input type="file" id="sicherung-datei" accept=".json,application/json" hidden></div>
+        <h2>Sicherung als Text</h2>
+        <p class="leise">Auf älteren iPads klappt das Speichern als Datei manchmal nicht. Dann den Spielstand als Text kopieren und zum Beispiel in einer Notiz einfügen. Zum Zurückholen den Text unten einfügen und «Aus Text laden» antippen.</p>
+        <div class="knopfzeile"><button class="btn" data-act="text-kopieren">Als Text kopieren</button></div>
+        ${ui.sicherText ? `<textarea id="sicher-text" class="eingabe text" readonly>${esc(ui.sicherText)}</textarea>` : ""}
+        <textarea id="lade-text" class="eingabe text" placeholder="Hier den kopierten Text einfügen"></textarea>
+        <div class="knopfzeile"><button class="btn" data-act="text-laden">Aus Text laden</button></div>
         <h2>Version</h2><p class="leise">Lernnest Version ${VER.n} vom ${esc(VER.date)}</p>
         <h2>Zurücksetzen</h2>
         ${ui.reset ? `<p><b>Wirklich alles löschen?</b> Münzen, Tier und Fortschritt sind dann weg. Vorher eine Sicherung speichern!</p><div class="knopfzeile"><button class="btn gefahr" data-act="reset-ja">Ja, alles löschen</button><button class="btn" data-act="reset-nein">Abbrechen</button></div>` : `<button class="btn" data-act="reset">Alles zurücksetzen …</button>`}`;
@@ -864,6 +873,7 @@
       case "eltern": h = eltern(); break;
       default: h = start();
     }
+    if (ui.tor) h += `<div class="dialog-hinter"><div class="dialog" role="dialog" aria-label="Für Eltern"><h2>Für Eltern</h2><p>Halte den Knopf etwa zwei Sekunden gedrückt, bis er ganz gefüllt ist. Oder rechne:</p><p class="tor-aufgabe"><b>${ui.tor.a} × ${ui.tor.b} =</b> <input id="tor-eingabe" class="eingabe klein" inputmode="numeric" autocomplete="off" aria-label="Ergebnis"></p><div class="knopfzeile"><button class="btn haupt" data-act="tor-ok">Öffnen</button><button class="btn" data-act="tor-zu">Abbrechen</button></div></div></div>`;
     if (ui.sicherFrage) h += `<div class="dialog-hinter"><div class="dialog" role="dialog" aria-label="Sicherung"><h2>Spielstand sichern?</h2><p>Die Sicherungsdatei kannst du in «Dateien» ablegen. Damit geht nichts verloren.</p><div class="knopfzeile"><button class="btn haupt" data-act="sicherung">Sicherung speichern</button><button class="btn" data-act="dialog-zu">Abbrechen</button></div></div></div>`;
     document.body.classList.toggle("ruhig", !!S.einst.ruhig);
     app.innerHTML = mitHund(h, true);
@@ -882,13 +892,35 @@
   }
 
   // Langer Druck öffnet die Eltern-Übersicht (Kinder tippen nur kurz)
+  // Langer Druck öffnet die Eltern-Übersicht. Mit Touch-Ereignissen statt Pointer-Ereignissen, weil ältere iPads
+  // diese nicht kennen und neuere einen langen Druck sonst als Textauswahl abbrechen. Die Füllung läuft per JavaScript.
+  // Kurz getippt: kleine Rechenaufgabe für Erwachsene als zweiter Weg.
   function elternKnopf() {
     const b = document.getElementById("eltern-knopf"); if (!b) return;
-    let tmr = null;
-    const los = (e) => { e.preventDefault(); b.classList.add("drueckt"); tmr = setTimeout(() => { b.classList.remove("drueckt"); gehe("eltern", { reiter: "fortschritt" }); }, TEST.elternMs || 1500); };
-    const halt = () => { clearTimeout(tmr); b.classList.remove("drueckt"); };
-    b.addEventListener("pointerdown", los); b.addEventListener("pointerup", halt); b.addEventListener("pointerleave", halt); b.addEventListener("pointercancel", halt);
-    b.addEventListener("click", () => { if (!document.querySelector(".eltern")) toast("Für Eltern: bitte länger gedrückt halten."); });
+    const fuell = b.querySelector(".fuell");
+    const DAUER = TEST.elternMs || 1500;
+    let start = 0, tmr = null, letzterTouch = 0, offen = false;
+    const stopp = () => { clearInterval(tmr); tmr = null; b.classList.remove("drueckt"); if (fuell) fuell.style.width = "0"; };
+    const schritt = () => {
+      const p = Math.min(1, (Date.now() - start) / DAUER);
+      if (fuell) fuell.style.width = Math.round(p * 100) + "%";
+      if (p >= 1 && !offen) { offen = true; stopp(); gehe("eltern", { reiter: "fortschritt" }); }
+    };
+    const los = () => { if (tmr) return; start = Date.now(); offen = false; b.classList.add("drueckt"); tmr = setInterval(schritt, 40); };
+    const loslassen = () => { const lief = tmr !== null; stopp(); if (lief && !offen) elternTor(); };
+    b.addEventListener("touchstart", (e) => { e.preventDefault(); letzterTouch = Date.now(); los(); }, { passive: false });
+    b.addEventListener("touchend", (e) => { e.preventDefault(); loslassen(); }, { passive: false });
+    b.addEventListener("touchcancel", stopp);
+    b.addEventListener("mousedown", (e) => { if (Date.now() - letzterTouch < 1500) return; e.preventDefault(); los(); });
+    b.addEventListener("mouseup", () => { if (Date.now() - letzterTouch < 1500) return; loslassen(); });
+    b.addEventListener("mouseleave", stopp);
+    b.addEventListener("contextmenu", (e) => e.preventDefault());
+    b.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); elternTor(); } });
+  }
+  function elternTor() {
+    ui.tor = { a: 12 + (zufall() % 18), b: 12 + (zufall() % 18) };
+    render();
+    const i = document.getElementById("tor-eingabe"); if (i && !("ontouchstart" in window)) i.focus();
   }
 
   // ================= Aktionen =================
@@ -998,7 +1030,7 @@
         const r = L.kaufe(S, arg);
         if (!r.ok) { if (r.grund === "muenzen") tierReagiert(null, `Dafür fehlen noch ${r.fehlt} Münzen. Die bekommst du beim Üben!`, 2600); return; }
         speichern();
-        if (r.snack) tierReagiert("mampf", pick(["Mmh, lecker!", "Mjam! Danke!", "Das schmeckt!", "Lecker, mehr davon!"]) , 2200);
+        if (r.snack) tierReagiert(d.id === "wasser" ? "jubel" : "mampf", d.id === "wasser" ? "Schlabber, schlabber! Danke!" : pick(["Mmh, lecker!", "Mjam! Danke!", "Das schmeckt!", "Lecker, mehr davon!"]), 2200);
         else { tierReagiert("jubel", L.SHOP.zimmer.includes(d) ? "Wie schön mein Zimmer wird!" : "Steht mir das?", 2000); konfetti(); }
         return;
       }
@@ -1019,7 +1051,29 @@
         speichern(); render(); toast("Gespeichert."); return;
       }
       case "sicherung": ui.sicherFrage = false; sicherungSpeichern(); render(); return;
+      case "text-kopieren": {
+        ui.sicherText = JSON.stringify({ app: "lernnest", version: VER.n, gespeichert: new Date().toISOString(), stand: S });
+        render();
+        const ta = document.getElementById("sicher-text");
+        let kopiert = false;
+        try { ta.removeAttribute("readonly"); ta.focus(); ta.select(); ta.setSelectionRange(0, ta.value.length); kopiert = document.execCommand("copy"); ta.setAttribute("readonly", ""); ta.blur(); } catch (e) { /* dann von Hand kopieren */ }
+        if (kopiert) { S.lastBackup = Date.now(); speichern(); }
+        toast(kopiert ? "Kopiert. Jetzt in einer Notiz einfügen." : "Bitte den Text lange antippen und kopieren.");
+        return;
+      }
+      case "text-laden": {
+        const t = (document.getElementById("lade-text") || {}).value || "";
+        try { sicherungAusText(t); } catch (e) { toast("Dieser Text ist keine Lernnest-Sicherung."); }
+        return;
+      }
       case "dialog-zu": ui.sicherFrage = false; render(); return;
+      case "tor-zu": ui.tor = null; render(); return;
+      case "tor-ok": {
+        const v = Number((document.getElementById("tor-eingabe") || {}).value);
+        if (ui.tor && v === ui.tor.a * ui.tor.b) { ui.tor = null; gehe("eltern", { reiter: "fortschritt" }); }
+        else { toast("Das stimmt leider nicht."); elternTor(); }
+        return;
+      }
       case "reset": ui.reset = true; render(); return;
       case "reset-nein": ui.reset = false; render(); return;
       case "reset-ja": {
@@ -1042,6 +1096,7 @@
     if (t && t.id === "eingabe") { e.preventDefault(); act(ui.ansicht === "probe" ? "probe-weiter" : "pruefen"); }
     if (t && (t.id === "name")) { e.preventDefault(); act("w-name"); }
     if (t && (t.id === "tiername")) { e.preventDefault(); act("w-fertig"); }
+    if (t && (t.id === "tor-eingabe")) { e.preventDefault(); act("tor-ok"); }
   });
   document.addEventListener("change", (e) => {
     const t = e.target;

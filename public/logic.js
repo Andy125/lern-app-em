@@ -99,12 +99,24 @@
   }
   // Englische Vokabeln: Rechtschreibung zählt genau (auch klein/groß). «to», «a», «an», «the» am Anfang
   // dürfen fehlen oder dabei sein, Satzzeichen am Ende sind egal.
+  // Klammern sind freiwillige Teile: «to go (to)» erlaubt «to go to» und «to go», «gym(nasium)» erlaubt «gym» und «gymnasium»
+  function varianten(z) {
+    const original = String(z);
+    let out = [original];
+    for (let i = 0; i < 3; i++) {
+      const neu = [];
+      for (const v of out) { const m = v.match(/\(([^()]*)\)/); if (!m) { neu.push(v); continue; } neu.push(v.replace(m[0], m[1]), v.replace(m[0], "")); }
+      out = neu;
+    }
+    return out.indexOf(original) < 0 ? out.concat(original) : out;
+  }
   function pruefeEnglisch(eingabe, ziel, auch) {
-    const sauber = (x) => String(x == null ? "" : x).trim().replace(/[’‘`´]/g, "'").replace(/\s+/g, " ").replace(/[!?.]+$/, "").trim();
+    const sauber = (x) => String(x == null ? "" : x).replace(/[’‘`´]/g, "'").replace(/…|\.\.\./g, " ").replace(/,/g, " ").replace(/\s+/g, " ").trim().replace(/[!?.]+$/, "").trim();
     const kurz = (x) => x.replace(/^(to|a|an|the) /i, "");
     const e = sauber(eingabe);
     if (!e) return { ok: false, exakt: false, leer: true };
-    const ziele = [ziel].concat(auch || []).map(sauber);
+    const ziele = [];
+    for (const z of [ziel].concat(auch || [])) for (const v of varianten(z)) ziele.push(sauber(v));
     if (ziele.some((z) => z === e || kurz(z) === kurz(e))) return { ok: true, exakt: true };
     const kl = (x) => kurz(x).toLowerCase();
     if (ziele.some((z) => kl(z) === kl(e))) return { ok: false, exakt: false, grossKlein: true };
@@ -139,6 +151,12 @@
   }
   const kurz = (s, n) => (s.length > n ? s.slice(0, n - 1).replace(/\s+\S*$/, "") + " …" : s);
   const auftraege = (fach) => fach.themen.flatMap((th) => th.karten.filter((k) => k.typ === "auftrag").map((k) => Object.assign({ thema: th.id }, k)));
+  // Teile einer Bedeutung: «nehmen; mitnehmen, bringen (zu)» -> nehmen | mitnehmen | bringen
+  // teileVon ohne Klammern (für «darf keine falsche Option sein», vorsichtig), teileRoh mit Klammern (für «gilt auch als richtig», streng)
+  const merk = (fn) => { const m = new Map(); return (x) => { x = String(x); if (!m.has(x)) m.set(x, fn(x)); return m.get(x); }; };
+  const teileVon = merk((s) => s.split(/[;,]/).map((x) => norm(x.replace(/\([^)]*\)/g, "")).replace(/^(der|die|das|ein|eine) /, "")).filter(Boolean));
+  const teileRoh = merk((s) => s.split(/[;,]/).map((x) => norm(x).replace(/^(der|die|das|ein|eine) /, "")).filter(Boolean));
+  const ueberlappt = (a, b) => { const B = teileVon(b); return teileVon(a).some((x) => B.indexOf(x) >= 0); };
   function vokabelnFach(fach) {
     if (fach.__vok) return fach.__vok;
     const v = []; for (const th of fach.themen) for (const k of th.karten) if (k.typ === "vokabel") { Object.defineProperty(k, "__thema", { value: th.id, enumerable: false, configurable: true }); v.push(k); }
@@ -312,7 +330,8 @@
         break;
       }
       case "en-de-wahl": case "de-en-wahl": {
-        const andere = vokabelnFach(fach).filter((x) => x !== k);
+        // keine Option, die dieselbe Bedeutung hat (sehen: to see / to look) oder dasselbe englische Wort
+        const andere = vokabelnFach(fach).filter((x) => x !== k && !ueberlappt(x.de, k.de) && kern(x.en) !== kern(k.en));
         const gleich = andere.filter((x) => x.__thema === teil.thema);
         const pool = gleich.length >= 3 ? gleich : andere;
         const enDe = modus === "en-de-wahl";
@@ -323,14 +342,17 @@
       }
       case "de-en-schreiben": {
         const wort = k.en.replace(/^(to|a|an|the) /i, "");
-        Object.assign(t, { art: "schreiben", frage: "Schreib das englische Wort.", text: k.de, loesung: k.en, auch: k.auchEn || [], englisch: k.en, sprache: "en", textSprache: "de", anfang: wort.charAt(0) });
+        // Auch richtig: ein anderes Wort, das alle gezeigten Bedeutungen hat (sehen: to see, aber auch to look)
+        const gezeigt = teileRoh(k.de);
+        const auchAndere = vokabelnFach(fach).filter((x) => x !== k && gezeigt.every((g) => teileRoh(x.de).includes(g))).map((x) => x.en);
+        Object.assign(t, { art: "schreiben", frage: /\s/.test(k.en.replace(/^(to|a|an|the) /i, "")) ? "Schreib es auf Englisch." : "Schreib das englische Wort.", text: k.de, loesung: k.en, auch: (k.auchEn || []).concat(auchAndere), englisch: k.en, sprache: "en", textSprache: "de", anfang: wort.charAt(0) });
         t.erklaerung = t.erklaerung || k.en + " = " + k.de;
         break;
       }
       case "satz-wahl": {
         const gap = satzLuecke(k);
         // Falsche Wörter aus der anderen Wortart (Nomen gegen Verben), damit nur eine Lösung passt
-        const pool = k.satzFalsch || vokabelnFach(fach).filter((x) => x !== k && x.satz && istVerb(x) !== istVerb(k)).map(satzLuecke);
+        const pool = k.satzFalsch || vokabelnFach(fach).filter((x) => x !== k && x.satz && istVerb(x) !== istVerb(k) && satzLuecke(x) !== satzLuecke(k)).map(satzLuecke);
         Object.assign(t, { art: "wahl", frage: "Welches Wort passt in die Lücke?", text: String(k.satz).replace(/\{[^}]+\}/, "___"), optionen: optionenMit(r, gap, pool, 4), loesung: gap, textSprache: "en", optionenSprache: "en", englisch: k.en });
         t.erklaerung = t.erklaerung || String(k.satz).replace(/[{}]/g, "") + " (" + k.en + " = " + k.de + ")";
         break;
@@ -596,7 +618,7 @@
     snacks: [
       { id: "apfel", name: "Apfel", icon: "🍎", preis: 3 },
       { id: "karotte", name: "Karotte", icon: "🥕", preis: 3 },
-      { id: "beeren", name: "Beeren", icon: "🫐", preis: 5 },
+      { id: "beeren", name: "Trauben", icon: "🍇", preis: 5 },
       { id: "keks", name: "Keks", icon: "🍪", preis: 5 },
       { id: "leckerli", name: "Leckerli", icon: "🍖", preis: 4 },
       { id: "kauknochen", name: "Kauknochen", icon: "🦴", preis: 6 },
@@ -610,11 +632,12 @@
       { id: "muetze", name: "Mütze", icon: "🧢", preis: 30 },
       { id: "blume", name: "Blume", icon: "🌼", preis: 20 },
       { id: "krone", name: "Krone", icon: "👑", preis: 60 },
+      { id: "halsband", name: "Halsband", icon: "🔵", preis: 15 },
     ],
     zimmer: [
       { id: "kissen", name: "Kuschelkissen", icon: "🛏️", preis: 20 },
-      { id: "teppich", name: "Teppich", icon: "🟪", preis: 25 },
-      { id: "pflanze", name: "Pflanze", icon: "🪴", preis: 15 },
+      { id: "teppich", name: "Teppich", icon: "🔮", preis: 25 },
+      { id: "pflanze", name: "Pflanze", icon: "🌿", preis: 15 },
       { id: "lampe", name: "Lampe", icon: "💡", preis: 30 },
       { id: "bild", name: "Bild", icon: "🖼️", preis: 20 },
       { id: "ball", name: "Ball", icon: "⚽", preis: 10 },
@@ -622,12 +645,38 @@
       { id: "regal", name: "Bücherregal", icon: "📚", preis: 35 },
       { id: "lichter", name: "Lichterkette", icon: "✨", preis: 40 },
     ],
+    // Für den Hund: nur Hundefutter und Hundesachen
+    hund: {
+      snacks: [
+        { id: "wasser", name: "Frisches Wasser", icon: "💧", preis: 1 },
+        { id: "futter", name: "Hundefutter", icon: "🥣", preis: 3 },
+        { id: "leckerli", name: "Leckerli", icon: "🍖", preis: 4 },
+        { id: "hundekeks", name: "Hundekeks", icon: "🍪", preis: 5 },
+        { id: "kauknochen", name: "Kauknochen", icon: "🦴", preis: 6 },
+        { id: "kaustange", name: "Kaustange", icon: "🥢", preis: 7 },
+      ],
+      zimmer: [
+        { id: "napf", name: "Futter- und Wassernapf", icon: "🥣", preis: 15 },
+        { id: "decke", name: "Hundedecke", icon: "🛏️", preis: 20 },
+        { id: "korb", name: "Hundekorb", icon: "🧺", preis: 30 },
+        { id: "ball", name: "Ball", icon: "⚽", preis: 10 },
+        { id: "kauseil", name: "Kauseil", icon: "➰", preis: 12 },
+        { id: "ente", name: "Quietsche-Ente", icon: "🐤", preis: 12 },
+        { id: "frisbee", name: "Frisbee", icon: "🥏", preis: 15 },
+        { id: "kuscheltier", name: "Kuscheltier", icon: "🧸", preis: 18 },
+        { id: "leine", name: "Leine am Haken", icon: "🔗", preis: 10 },
+      ],
+    },
   };
-  const shopDing = (id) => SHOP.snacks.concat(SHOP.zubehoer, SHOP.zimmer).find((x) => x.id === id) || null;
+  // Was es im Laden für dieses Tier gibt
+  const laden = (art) => ({ snacks: art === "hund" ? SHOP.hund.snacks : SHOP.snacks, zubehoer: SHOP.zubehoer, zimmer: art === "hund" ? SHOP.hund.zimmer : SHOP.zimmer });
+  const ALLE_SNACKS = SHOP.snacks.concat(SHOP.hund.snacks);
+  const ALLE_ZIMMER = SHOP.zimmer.concat(SHOP.hund.zimmer.filter((x) => !SHOP.zimmer.some((y) => y.id === x.id)));
+  const shopDing = (id) => ALLE_SNACKS.concat(SHOP.zubehoer, ALLE_ZIMMER).find((x) => x.id === id) || null;
   function kaufe(s, id) {
     const d = shopDing(id);
     if (!d) return { ok: false, grund: "unbekannt" };
-    const snack = SHOP.snacks.includes(d);
+    const snack = ALLE_SNACKS.includes(d);
     if (!snack && s.besitz.includes(id)) return { ok: false, grund: "schon" };
     if (s.muenzen < d.preis) return { ok: false, grund: "muenzen", fehlt: d.preis - s.muenzen };
     s.muenzen -= d.preis;
@@ -651,7 +700,7 @@
     heuteISO, tageBis, plusTage, gueltigesDatum,
     defaults, migrate, record, teilStand, bereitschaft, wackelt, sterneFuer,
     buildEtappe, buildProbe, planListe, planTag, etappenFuer,
-    SHOP, shopDing, kaufe, STUFEN, stufe, LOHN,
+    SHOP, laden, shopDing, kaufe, varianten, teileVon, ueberlappt, STUFEN, stufe, LOHN,
   };
   root.LN = L;
   if (typeof module !== "undefined" && module.exports) module.exports = L;

@@ -91,9 +91,11 @@ ok((await page.locator(".etappe-punkt.fertig").count()) === 3, "drei Haken bei d
 // ---------- Tier ----------
 await page.click(".kachel[data-act=tier]");
 const m0 = (await stand(page)).muenzen;
-await page.click("[data-act=kaufen][data-arg=apfel]");
+ok((await page.locator("[data-act=kaufen][data-arg=kuchen]").count()) === 0 && (await page.locator("[data-act=kaufen][data-arg=kauknochen]").count()) === 1, "Hund bekommt nur Hundefutter, keinen Kuchen");
+ok((await page.locator(".laden-ding svg.laden-bild").count()) >= 5 && (await page.locator(".muenzen svg.muenze").count()) === 1, "gezeichnete Bilder im Laden und goldene Münze oben");
+await page.click("[data-act=kaufen][data-arg=leckerli]");
 s = await stand(page);
-ok(s.muenzen === m0 - 3 && s.gefuettert === 1, "Apfel gefüttert");
+ok(s.muenzen === m0 - 4 && s.gefuettert === 1, "Leckerli gefüttert");
 ok((await page.locator(".kau").count()) === 1, "Tier mampft");
 await page.click("[data-act=tier-reiter][data-arg=zubehoer]");
 await page.click("[data-act=kaufen][data-arg=schleife]");
@@ -107,8 +109,12 @@ ok((await page.textContent(".sprechblase")).includes("fehlen noch"), "zu wenig M
 ok(!(await stand(page)).besitz.includes("krone"), "nichts gekauft ohne Münzen");
 await page.evaluate(() => { window.__LN.stand().muenzen = 200; window.__LN.speichern(); });
 await page.click("[data-act=tier-reiter][data-arg=zimmer]");
-await page.click("[data-act=kaufen][data-arg=pflanze]");
-ok((await stand(page)).besitz.includes("pflanze"), "Pflanze fürs Zimmer");
+ok((await page.locator("[data-act=kaufen][data-arg=korb]").count()) === 1 && (await page.locator("[data-act=kaufen][data-arg=napf]").count()) === 1, "Zimmer: Hundekorb und Napf im Laden");
+for (const id of ["korb", "decke", "napf", "ente"]) await page.click(`[data-act=kaufen][data-arg=${id}]`);
+ok((await stand(page)).besitz.includes("korb") && (await stand(page)).besitz.includes("napf"), "Hundekorb und Napf gekauft");
+await page.evaluate(() => { window.__LN.stand().besitz.push("pflanze", "ball"); window.__LN.speichern(); });
+await page.click("[data-act=tier-reiter][data-arg=futter]"); await page.click("[data-act=tier-reiter][data-arg=zimmer]");
+ok((await page.locator("[data-act=kaufen][data-arg=pflanze]").count()) === 1 && (await page.locator("[data-act=kaufen][data-arg=ball]").count()) === 1, "früher gekaufte Sachen bleiben sichtbar, nichts doppelt");
 await foto("09-tier");
 await page.click("[data-act=streicheln]");
 ok((await page.locator(".herzen").count()) === 1, "Streicheln zeigt Herzen");
@@ -173,9 +179,30 @@ await page.click("[data-act=heim]");
 
 // ---------- Eltern ----------
 await page.click("#eltern-knopf");
-ok((await ansicht(page)) === "start", "kurzes Tippen öffnet die Eltern-Übersicht nicht");
+ok((await ansicht(page)) === "start" && (await page.locator(".dialog").textContent()).includes("Für Eltern"), "kurzes Tippen: Hinweis mit Rechenaufgabe statt Eltern-Übersicht");
+const tor = await page.evaluate(() => window.__LN.ui().tor);
+await page.fill("#tor-eingabe", String(tor.a * tor.b + 1)); await page.click("[data-act=tor-ok]");
+ok((await ansicht(page)) === "start", "falsche Rechnung öffnet nicht");
+const tor2 = await page.evaluate(() => window.__LN.ui().tor);
+await page.fill("#tor-eingabe", String(tor2.a * tor2.b)); await page.click("[data-act=tor-ok]");
+ok((await ansicht(page)) === "eltern", "richtige Rechnung öffnet die Eltern-Übersicht");
+await page.click("[data-act=heim]");
+// Langer Druck mit dem Finger (Touch-Ereignisse wie auf dem iPad)
+{
+  await page.locator("#eltern-knopf").scrollIntoViewIfNeeded();
+  const bx = await page.locator("#eltern-knopf").boundingBox();
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: bx.x + bx.width / 2, y: bx.y + bx.height / 2 }] });
+  await page.waitForTimeout(100);
+  const breite = await page.evaluate(() => parseFloat(document.querySelector("#eltern-knopf .fuell").style.width) || 0);
+  ok(breite > 0, `beim Drücken füllt sich der Knopf (${breite} %)`);
+  await page.waitForTimeout(350);
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  ok((await ansicht(page)) === "eltern", "langer Druck mit dem Finger öffnet die Eltern-Übersicht");
+  await page.click("[data-act=heim]");
+}
 await langDruecken(page, "#eltern-knopf", 450);
-ok((await ansicht(page)) === "eltern", "langer Druck öffnet die Eltern-Übersicht");
+ok((await ansicht(page)) === "eltern", "langer Druck mit der Maus öffnet die Eltern-Übersicht");
 ok((await page.locator(".tage-balken > div").count()) === 7, "Übungszeit für 7 Tage");
 await foto("14-eltern");
 await page.click("[data-act=eltern-reiter][data-arg=plan]");
@@ -216,7 +243,7 @@ await page.click("[data-act=heim]");
 await page.click("[data-act=themen]");
 await page.click("[data-act=thema][data-arg=hunde-englisch]");
 await page.click("[data-act=etappe-los]");
-await page.evaluate(() => { const R = window.__LN.ui().runde; R.specs.splice(R.i + 1, 0, { teil: "he-dog", modus: "de-en-schreiben", seed: 1 }); });
+await page.evaluate(() => { const R = window.__LN.ui().runde; R.specs.splice(R.i + 1, 0, { teil: "w2-dog", modus: "de-en-schreiben", seed: 1 }); });
 await loese(page); await page.click("[data-act=weiter]");
 t = await aufgabe(page);
 ok(t.modus === "de-en-schreiben" && t.loesung === "dog", "Schreibaufgabe Deutsch → Englisch");
@@ -254,6 +281,15 @@ await page.waitForFunction(() => window.__LN.stand().name === "Testkind", null, 
 s = await stand(page);
 ok(s.muenzen === vorher.muenzen && s.tier.name === "Fuchsi" && s.proben[FID].length === 1, "Sicherung geladen, alles wieder da");
 ok((await ansicht(page)) === "start", "nach dem Laden: Startseite");
+await langDruecken(page, "#eltern-knopf", 450);
+await page.click("[data-act=eltern-reiter][data-arg=sicherung]");
+// Sicherung als Text (für ältere iPads)
+await page.click("[data-act=text-kopieren]");
+const text = await page.inputValue("#sicher-text");
+ok(JSON.parse(text).app === "lernnest" && JSON.parse(text).stand.name === "Testkind", "Sicherung als Text enthält den Stand");
+await page.evaluate(() => { const s = window.__LN.stand(); s.muenzen = 1; window.__LN.speichern(); });
+await page.fill("#lade-text", text); await page.click("[data-act=text-laden]");
+ok((await stand(page)).muenzen === JSON.parse(text).stand.muenzen, "Sicherung aus Text geladen");
 await langDruecken(page, "#eltern-knopf", 450);
 await page.click("[data-act=eltern-reiter][data-arg=sicherung]");
 await page.setInputFiles("#sicherung-datei", { name: "x.json", mimeType: "application/json", buffer: Buffer.from('{"hallo":1}') });
