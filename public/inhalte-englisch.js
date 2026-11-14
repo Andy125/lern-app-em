@@ -1,6 +1,6 @@
 // Englisch Klasse 5, Gymnasium Baden-Württemberg (britisches Englisch).
 // Wörter und Bedeutungen nach der Vokabelliste des Schulbuchs (Hello! bis Unit 1, Station 3).
-// Beispielsätze sind selbst geschrieben. Ältere Teile sind Wiederholung (bonus: zählen nicht für den Plan).
+// Beispielsätze sind selbst geschrieben. Alles zählt für den Plan, nur «Hunde-Englisch» ist Bonus.
 // Vokabel-Karten: en, de, auchEn (weitere richtige Schreibweisen), satz mit genau einer {Lücke}.
 // Ein englisches Wort darf im ganzen Fach nur einmal vorkommen. {hund} und {hund3} wie in inhalte-bio.js.
 (function (root) {
@@ -193,7 +193,7 @@
       },
       // ======================================================================
       {
-        id: "w-hello", name: "Wiederholung: Hello!", icon: "👋", bonus: true,
+        id: "w-hello", name: "Wiederholung: Hello!", icon: "👋",
         karten: [
           h("Hello.", "Hallo."), h("My name is …", "Ich heiße …"), h("to be", "sein"), h("What's your name?", "Wie heißt du?; Wie heißen Sie?", { auchEn: ["What is your name?"] }),
           h("Hi.", "Hi."), h("I'm …", "Ich bin …", { auchEn: ["I am …"] }), h("I'm from …", "Ich bin aus …", { auchEn: ["I am from …"] }), h("but", "aber"),
@@ -206,7 +206,7 @@
         ],
       },
       {
-        id: "w-london", name: "Wiederholung: Welcome to London!", icon: "🎡", bonus: true,
+        id: "w-london", name: "Wiederholung: Welcome to London!", icon: "🎡",
         karten: [
           l("welcome (to)", "willkommen (in)"), l("What can you hear?", "Was kannst du hören?; Was könnt ihr hören?"), l("to hear", "hören"), l("the", "der; die; das"),
           l("a", "ein/-e"), l("boat", "Boot"), l("flower", "Blume"), l("girl", "Mädchen"), l("on", "auf; an; am; in; im"), l("skates", "Inlineskates; Rollschuhe; Schlittschuhe"),
@@ -220,7 +220,7 @@
         ],
       },
       {
-        id: "w-zahlen", name: "Wiederholung: Numbers and colours", icon: "🎨", bonus: true,
+        id: "w-zahlen", name: "Wiederholung: Numbers and colours", icon: "🎨",
         karten: [
           z("zero", "null"), z("one", "eins"), z("two", "zwei"), z("three", "drei"), z("four", "vier"), z("five", "fünf"), z("six", "sechs"),
           z("seven", "sieben"), z("eight", "acht"), z("nine", "neun"), z("ten", "zehn"), z("eleven", "elf"), z("twelve", "zwölf"),
@@ -229,7 +229,7 @@
         ],
       },
       {
-        id: "w-greenwich", name: "Wiederholung: The friends in Greenwich", icon: "👫", bonus: true,
+        id: "w-greenwich", name: "Wiederholung: The friends in Greenwich", icon: "👫",
         karten: [
           g("to like", "mögen; gern haben"), g("to take photos", "Fotos machen"), g("big", "groß"), g("sister", "Schwester"), g("best", "beste/-r/-s"),
           g("and", "und"), g("we're", "wir sind", { auchEn: ["we are"] }), g("to have", "haben"), g("funny", "lustig; witzig"), g("food", "Essen; Lebensmittel"),
@@ -245,7 +245,7 @@
         ],
       },
       {
-        id: "w-freizeit", name: "Wiederholung: Free time", icon: "🎸", bonus: true,
+        id: "w-freizeit", name: "Wiederholung: Free time", icon: "🎸",
         karten: [
           f("basketball", "Basketball"), f("tennis", "Tennis"), f("skiing", "Skifahren"), f("windsurfing", "Windsurfen"), f("cinema", "Kino"),
           f("picnic", "Picknick"), f("video", "Video"), f("music", "Musik"), f("guitar", "Gitarre"), f("piano", "Klavier; Piano"),
@@ -257,7 +257,7 @@
         ],
       },
       {
-        id: "w-schulsachen", name: "Wiederholung: School things", icon: "✏️", bonus: true,
+        id: "w-schulsachen", name: "Wiederholung: School things", icon: "✏️",
         karten: [
           s("thing", "Ding; Sache"), s("exercise book", "Übungsheft; Heft"), s("marker", "Leuchtstift"), s("pen", "Füller; Kugelschreiber"),
           s("pencil", "Bleistift; Buntstift"), s("pencil case", "Federmäppchen; Mäppchen"), s("rubber", "Radiergummi"), s("ruler", "Lineal"),

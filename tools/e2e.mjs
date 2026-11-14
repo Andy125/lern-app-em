@@ -30,7 +30,8 @@ await foto("02-start");
 // ---------- Tagesmission ----------
 await page.click("[data-act=mission]");
 ok((await ansicht(page)) === "etappe-start" && (await page.textContent("main")).includes("Etappe 1 von 3"), "Etappe 1 von 3 startet");
-ok((await page.textContent(".untertitel")).includes("Englisch"), "gemeinsame Mission: Aufwärmen mit dem anderen Fach (Englisch)");
+const etappenFach = await page.evaluate(() => window.__LN.ui().runde.etappen.map((e) => e.fach));
+ok(etappenFach[0] !== etappenFach[1] && etappenFach[1] === etappenFach[2], `gemeinsame Mission: Aufwärmen im einen Fach, Schwerpunkt im anderen (${etappenFach.join(", ")})`);
 await keinPlatzhalter("Etappe 1");
 await page.click("[data-act=etappe-los]");
 await foto("03-aufgabe");
@@ -70,8 +71,9 @@ ok((await ansicht(page)) === "bewegung" && (await page.locator("#pause-weiter").
 await foto("07-bewegung");
 await page.waitForFunction(() => !document.getElementById("pause-weiter").disabled, null, { timeout: 5000 });
 await page.click("#pause-weiter");
-ok((await page.textContent("main")).includes("Etappe 2 von 3") && (await page.textContent(".untertitel")).includes("Bio"), "Etappe 2 startet nach der Pause, Schwerpunkt Bio");
-ok((await page.locator(".warum-box").count()) === 1 && (await page.textContent(".warum-box")).includes("Flocke"), "Neues Thema beginnt mit der Warum-Frage, mit dem Namen des Hundes");
+ok((await page.textContent("main")).includes("Etappe 2 von 3"), "Etappe 2 startet nach der Pause");
+ok((await page.locator(".warum-box").count()) === 1, "Neues Thema beginnt mit der Warum-Frage");
+if (etappenFach[1] === "bio") ok((await page.textContent(".warum-box")).includes("Flocke"), "Warum-Frage nennt den Hund");
 await foto("07b-warum");
 await spieleEtappe(page);
 await page.click("[data-act=bewegung]");

@@ -14,7 +14,7 @@ Oben rechts steht die Versionsnummer. So sieht man nach einem Update, ob die neu
 
 ## Was die App kann
 
-- **Tagesmission**: drei Etappen à 6 Aufgaben (Aufwärmen, Neues entdecken, Festigen), dazwischen 30 Sekunden Bewegung. Bei mehreren Fächern ist es eine gemeinsame Mission: Das Fach mit der nächsten Arbeit bekommt «Neues» und «Festigen», ein anderes Fach wird zum Aufwärmen wiederholt. In den zwei Tagen vor einer Arbeit gehört die ganze Mission diesem Fach. Wer mittendrin aufhört, macht später mit der nächsten Etappe weiter. Danach gibt es Bonus-Runden ohne Limit.
+- **Tagesmission**: drei Etappen à 6 Aufgaben (Aufwärmen, Neues entdecken, Festigen), dazwischen 30 Sekunden Bewegung. Bei mehreren Fächern ist es eine gemeinsame Mission: Das Fach mit der nächsten Arbeit bekommt «Neues» und «Festigen», ein anderes Fach wird zum Aufwärmen wiederholt. In den zwei Tagen vor einer Arbeit gehört die ganze Mission diesem Fach. Haben beide Fächer keinen Termin (oder denselben), wechselt der Schwerpunkt jeden Tag. Wer mittendrin aufhört, macht später mit der nächsten Etappe weiter. Danach gibt es Bonus-Runden ohne Limit.
 - **Plan bis zur Arbeit**: Mit dem Datum der Arbeit verteilt die App die Themen auf die Tage. Zwei Tage vorher eine Probe-Arbeit, am Tag davor nur Wiederholen, am Tag selbst eine kurze Mutmacher-Runde.
 - **Aufgabenarten**: Auswahl, Stimmt/Stimmt nicht, mehrere antippen, Reihenfolge, Zuordnen, Lückentext mit Wortkasten, Begriff schreiben, Zahl eingeben, Bild beschriften und Stelle im Bild antippen.
 - **Hilfe in Stufen**: auf Wunsch ein Tipp; nach dem ersten Fehler ein Tipp, Richtiges bleibt stehen; nach dem zweiten Fehler die Lösung mit Erklärung und Merkhilfe. Die Aufgabe kommt in derselben Etappe noch einmal.

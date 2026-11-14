@@ -203,7 +203,9 @@
   function missionHeute() {
     const liste = FAECHER.map((f, i) => { const a = arbeitInfo(f); const d = a.datum ? L.tageBis(heute(), a.datum) : null; return { f, i, p: heutigerPlan(f), d: d != null && d >= 0 ? d : null }; });
     liste.sort((x, y) => (x.d == null ? 9999 : x.d) - (y.d == null ? 9999 : y.d) || x.i - y.i);
-    const h = liste[0];
+    // Gleich nahe Arbeit (zum Beispiel beide ohne Datum): Schwerpunkt wechselt jeden Tag
+    const gleich = liste.filter((x) => x.d === liste[0].d);
+    const h = gleich[((L.tageBis("2026-01-01", heute()) % gleich.length) + gleich.length) % gleich.length];
     const etappen = L.etappenFuer(h.p).map((e) => Object.assign({}, e, { fach: h.f.id }));
     const knapp = h.d != null && h.d <= 2;
     const n = liste.find((x) => x !== h);
