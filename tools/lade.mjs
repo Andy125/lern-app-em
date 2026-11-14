@@ -24,7 +24,7 @@ export function ladeLogik() {
 // Kleiner Prüfer: zählt, sammelt Fehler, beendet mit Code 1 bei Fehlern
 export function pruefer(name) {
   let n = 0; const fehler = [];
-  const ok = (bed, text) => { n++; if (!bed) { fehler.push(text); if (fehler.length <= 40) console.log("FAIL " + text); } };
+  const ok = (bed, text) => { n++; if (!bed) { fehler.push(text); if (fehler.length <= 40 || process.env.ALLE_FEHLER) console.log("FAIL " + text); } };
   const ende = () => {
     if (fehler.length) { console.log(`${name}: ${fehler.length} von ${n} Prüfungen fehlgeschlagen`); process.exit(1); }
     console.log(`${name}: alle ${n} Prüfungen bestanden`);

@@ -14,7 +14,7 @@ Oben rechts steht die Versionsnummer. So sieht man nach einem Update, ob die neu
 
 ## Was die App kann
 
-- **Tagesmission**: drei Etappen à 6 Aufgaben (Aufwärmen, Neues entdecken, Festigen), dazwischen 30 Sekunden Bewegung. Bei mehreren Fächern ist es eine gemeinsame Mission: Das Fach mit der nächsten Arbeit bekommt «Neues» und «Festigen», ein anderes Fach wird zum Aufwärmen wiederholt. In den zwei Tagen vor einer Arbeit gehört die ganze Mission diesem Fach. Wer mittendrin aufhört, macht später mit der nächsten Etappe weiter. Danach gibt es Bonus-Runden ohne Limit.
+- **Tagesmission**: drei Etappen à 6 Aufgaben (Aufwärmen, Neues entdecken, Festigen), dazwischen 30 Sekunden Bewegung. Bei mehreren Fächern ist es eine gemeinsame Mission: Das Fach mit der nächsten Arbeit bekommt «Neues» und «Festigen», ein anderes Fach wird zum Aufwärmen wiederholt. In den zwei Tagen vor einer Arbeit gehört die ganze Mission diesem Fach. Haben beide Fächer keinen Termin (oder denselben), wechselt der Schwerpunkt jeden Tag. Wer mittendrin aufhört, macht später mit der nächsten Etappe weiter. Danach gibt es Bonus-Runden ohne Limit.
 - **Plan bis zur Arbeit**: Mit dem Datum der Arbeit verteilt die App die Themen auf die Tage. Zwei Tage vorher eine Probe-Arbeit, am Tag davor nur Wiederholen, am Tag selbst eine kurze Mutmacher-Runde.
 - **Aufgabenarten**: Auswahl, Stimmt/Stimmt nicht, mehrere antippen, Reihenfolge, Zuordnen, Lückentext mit Wortkasten, Begriff schreiben, Zahl eingeben, Bild beschriften und Stelle im Bild antippen.
 - **Hilfe in Stufen**: auf Wunsch ein Tipp; nach dem ersten Fehler ein Tipp, Richtiges bleibt stehen; nach dem zweiten Fehler die Lösung mit Erklärung und Merkhilfe. Die Aufgabe kommt in derselben Etappe noch einmal.
@@ -24,7 +24,11 @@ Oben rechts steht die Versionsnummer. So sieht man nach einem Update, ob die neu
 - **Forschen & Basteln**: echte Aufträge zum Beobachten, Bauen (zum Beispiel mit Ofenknete) und Bewegen. Wer einen geschafft hat, tippt «Geschafft!» und bekommt Münzen.
 - **Lernkarten** zum Nachlesen, mit Vorlesen.
 - **Probe-Arbeit** wie eine echte Arbeit: keine Rückmeldung zwischendurch, Überspringen möglich, am Ende Ergebnis je Thema.
-- **Das Tier**: Hund (Labrador in Foxred), Katze, Hase, Fuchs, Panda oder Hamster, eigene Zeichnungen. Es wächst mit den Punkten (Baby oder Welpe, Klein, Groß, Held).
+- **Das Tier**: Hund (Labrador in Foxred), Katze, Hase, Fuchs, Panda oder Hamster, eigene Zeichnungen. Es wächst mit den Punkten (Baby oder Welpe, Klein, Groß, Held). Bezahlt wird mit goldenen Münzen. Der Hund bekommt nur Hundefutter (Wasser, Futter, Leckerli, Hundekeks, Kauknochen, Kaustange), ins Zimmer kommen Hundekorb, Decke, Napf und Spielzeug.
+
+## Ältere iPads
+
+Die App läuft auch auf älteren iPads (iOS 12). Deshalb: keine Emoji, die erst später kamen (die Münze ist gezeichnet), kein CSS «inset», Abstände mit Rändern, wo Safari «gap» in Flexbox nicht kennt, und der lange Druck nutzt Touch-Ereignisse. `tools/test-version.mjs` prüft Emoji und «inset».
 
 ## Für Kinder mit Konzentrationsschwierigkeiten
 
@@ -32,7 +36,7 @@ Kurze Etappen mit sichtbarem Fortschritt, ein klarer nächster Schritt auf der S
 
 ## Eltern-Übersicht
 
-Auf der Startseite unten «Für Eltern: gedrückt halten» etwa zwei Sekunden lang drücken.
+Auf der Startseite unten «Für Eltern: gedrückt halten» etwa zwei Sekunden lang drücken, bis der Knopf ganz gefüllt ist. Wer nur kurz tippt, bekommt eine Rechenaufgabe für Erwachsene als zweiten Weg (zum Beispiel, falls der lange Druck auf einem Gerät nicht klappt).
 
 - **Fortschritt**: Bereitschaft je Thema, was noch wackelt, Übungszeit der letzten 7 Tage, Probe-Ergebnisse
 - **Plan**: Titel und Datum der nächsten Arbeit, Tagesplan bis dahin
@@ -41,7 +45,7 @@ Auf der Startseite unten «Für Eltern: gedrückt halten» etwa zwei Sekunden la
 
 ## Spielstand
 
-Der Spielstand liegt nur auf dem Gerät. Er wird mehrfach gesichert: Hauptspeicher, zweite Kopie und ein Spiegel in IndexedDB. Fehlt einer, springt der nächste ein. Dazu kommt die Sicherungsdatei (Eltern-Übersicht oder Versionsnummer antippen), die man in «Dateien» oder iCloud ablegt. Die Versionsanzeige wird orange, wenn die letzte Sicherungsdatei älter als 7 Tage ist.
+Der Spielstand liegt nur auf dem Gerät. Er wird mehrfach gesichert: Hauptspeicher, zweite Kopie und ein Spiegel in IndexedDB. Fehlt einer, springt der nächste ein. Dazu kommt die Sicherungsdatei (Eltern-Übersicht oder Versionsnummer antippen), die man in «Dateien» oder iCloud ablegt. Ältere iPads können oft keine Dateien speichern: Dann «Als Text kopieren» und den Text in einer Notiz aufheben; «Aus Text laden» holt alles zurück. Die Versionsanzeige wird orange, wenn die letzte Sicherungsdatei älter als 7 Tage ist.
 
 ## Inhalte schreiben
 

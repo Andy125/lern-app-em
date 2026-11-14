@@ -163,9 +163,11 @@ for (const fach of FAECHER) {
         const r = L.check(t, t.loesung);
         ok(r.ok && r.exakt, `${T}: genaue Schreibweise ist richtig und exakt`);
         if (t.sprache === "en") {
-          ok(!L.check(t, t.loesung.slice(0, -1)).ok, `${T}: Englisch: ein Buchstabe fehlt ist falsch`);
+          const ohneBuchstabe = t.loesung.replace(/[A-Za-z](?=[^A-Za-z]*$)/, "");
+          ok(!L.check(t, ohneBuchstabe).ok, `${T}: Englisch: ein Buchstabe fehlt ist falsch`);
           ok(!L.check(t, "").ok, `${T}: leer ist nicht richtig`);
-          for (const v of L.vokabelnFach(fach)) if (v.en !== t.loesung) ok(!L.check(t, v.en).ok, `${T}: anderes Wort «${v.en}» falsch`);
+          // andere Wörter gelten nicht, außer sie haben alle gezeigten Bedeutungen (dann stehen sie in t.auch)
+          if (seed === 1) for (const v of L.vokabelnFach(fach)) if (v.en !== t.loesung && !(t.auch || []).includes(v.en)) ok(!L.check(t, v.en).ok, `${T}: anderes Wort «${v.en}» falsch`);
           break;
         }
         ok(L.check(t, t.loesung.toLowerCase()).ok, `${T}: klein geschrieben erkennbar`);
@@ -276,7 +278,8 @@ for (const fach of FAECHER) {
   ok(w.some((x) => x.teil === e[0].teil), `${fach.id}: Wiederholung enthält den Fehler`);
   const p = L.buildProbe(fach, s, { n: 12, seed: 3 });
   ok(p.length === Math.min(12, L.fachTeile(fach).length) || p.length === 12, `${fach.id}: Probe hat 12 Aufgaben`);
-  ok(fach.themen.every((t) => p.some((x) => L.teilById(fach, x.teil).thema === t.id)), `${fach.id}: Probe deckt alle Themen ab`);
+  ok(L.planThemen(fach).every((t) => p.some((x) => L.teilById(fach, x.teil).thema === t.id)), `${fach.id}: Probe deckt alle Themen ab (ohne Bonus)`);
+  ok(p.every((x) => !fach.themen.find((t) => t.id === L.teilById(fach, x.teil).thema).bonus) || L.planThemen(fach).some((t) => t.bonus), `${fach.id}: Probe ohne Bonus-Themen`);
   ok(p.every((x) => L.makeTask(fach, x.teil, x.modus, x.seed)), `${fach.id}: Probe-Aufgaben entstehen`);
   for (let i = 0; i < 6; i++) for (const x of L.fachTeile(fach)) L.record(s, fach.id, x.id, true, "2026-11-13");
   ok(L.bereitschaft(s, fach) === 100, `${fach.id}: alles sicher = 100 %`);
