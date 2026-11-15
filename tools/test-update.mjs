@@ -21,7 +21,8 @@ if (!fs.existsSync(arg)) {
 const altVersion = Number((fs.readFileSync(path.join(alt, "version.js"), "utf8").match(/n:\s*(\d+)/) || [])[1]);
 const { ok, ende } = pruefer("Update");
 if (!fs.existsSync(arg)) {
-  const geaendert = execSync(`git diff --name-only ${arg} -- public`, { cwd: ROOT }).toString().trim();
+  // public/englisch/ ist eine eigenständige App mit eigener Version und eigenem Offline-Speicher
+  const geaendert = execSync(`git diff --name-only ${arg} -- public ':!public/englisch'`, { cwd: ROOT }).toString().trim();
   ok(!geaendert || VERSION > altVersion, `public/ hat sich geändert, also muss die Versionsnummer steigen (alt ${altVersion}, neu ${VERSION})`);
 }
 

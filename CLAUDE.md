@@ -6,3 +6,4 @@ Lern-App fürs iPad für eine Schülerin (Klasse 5, Gymnasium Baden-Württemberg
 - Vor jedem Merge den Vater fragen.
 - Das Repository ist öffentlich: keine Namen, Noten oder Fotos. Privates Material nur in `privat/`.
 - Texte in der App: deutsch mit ß, Du-Form, ermutigend, keine langen Gedankenstriche.
+- `public/englisch/` ist eine eigenständige App (Business-Englisch für den Vater, Schweizer Schreibweise mit ss) mit eigenem `sw.js` und Speicherschlüssel `b2english.v1`. Änderungen dort erhöhen die Lernnest-Version nicht; Test: `tools/e2e-englisch.mjs`.

@@ -115,6 +115,10 @@ Bei jedem Pull Request laufen alle Tests in GitHub Actions. Nach dem Merge in `m
 
 Bei jeder Änderung an `public/` die Versionsnummer in `public/version.js` und den Cache-Namen in `public/sw.js` gemeinsam erhöhen. Der genaue Ablauf steht im Skill `.claude/skills/lernnest-release`.
 
+## Englisch-App für Erwachsene
+
+Unter `public/englisch/` liegt eine eigenständige Lern-App für Business-Englisch in Meetings und Coachings (B1 zu B2), erreichbar unter `/englisch/`. Sie hat einen eigenen Offline-Speicher und einen eigenen Spielstand und berührt Lernnest nicht. Änderungen dort brauchen keine neue Lernnest-Version.
+
 ## Datenschutz und Urheberrecht
 
 Das Repository und die Seite sind öffentlich. Deshalb kommen **keine Namen, Noten, Fotos von Arbeiten oder Lernzetteln** hinein. Der Name des Kindes und des Tiers werden nur auf dem Gerät gespeichert. Fotos und Material zum Auswerten liegen lokal im Ordner `privat/`, der nicht hochgeladen wird.
