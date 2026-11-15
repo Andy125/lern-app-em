@@ -1,0 +1,15 @@
+{
+  "name": "Business English B2",
+  "short_name": "Englisch B2",
+  "description": "Tägliche 15-Minuten-Mission für Business-Englisch in Meetings und Coachings.",
+  "lang": "de",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#EDF1EC",
+  "theme_color": "#1C4A37",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

@@ -43,6 +43,8 @@ jobs:
         run: node tools/test-update.mjs
       - name: Zufälliges Durchklicken
         run: node tools/monkey.mjs 300 1
+      - name: Englisch-App für Erwachsene (eigener Ordner)
+        run: node tools/e2e-englisch.mjs
   deploy:
     needs: test
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
