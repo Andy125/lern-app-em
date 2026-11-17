@@ -63,9 +63,30 @@ for (const [name, vp] of [["iPad hochkant", IPAD_HOCH], ["iPad quer", IPAD_QUER]
   if (faecher.length > 1) await page.click(`[data-act=fach][data-arg=${faecher[0]}]`);
   const alleArten = await page.evaluate(() => { const m = new Set(); for (const f of window.LN_FAECHER) for (const t of window.LN.fachTeile(f)) for (const x of window.LN.modi(t.karte)) m.add(x); return m.size; });
   ok(arten.size === alleArten, `${name}: alle ${alleArten} Aufgabenarten angezeigt (${arten.size})`);
-  await page.click(".kachel[data-act=tier]");
+  await page.click(".hund-karte");
   await messe(page, name + " Tier");
   await foto("tier");
+  await page.click("[data-act=heim]");
+  // Spielhalle und beide Spiele: Spielfeld und Knöpfe passen ohne Scrollen auf den Bildschirm
+  await page.evaluate(() => { const s = window.__LN.stand(); s.tokens = 2; window.__LN.speichern(); });
+  await page.click(".arcade [data-act=spielhalle]");
+  await messe(page, name + " Spielhalle");
+  await foto("spielhalle");
+  for (const art of ["run", "bloecke"]) {
+    await page.click(`[data-act=spiel-start][data-arg=${art}]`);
+    await page.waitForTimeout(400);
+    await messe(page, `${name} Spiel ${art}`);
+    const r = await page.evaluate(() => {
+      const c = document.querySelector("canvas.spielfeld").getBoundingClientRect();
+      const st = document.querySelector(".steuerung"); const k = st ? st.getBoundingClientRect() : c;
+      return { unten: Math.max(c.bottom, k.bottom), hoch: window.innerHeight, breit: c.width, hochFeld: c.height };
+    });
+    ok(r.unten <= r.hoch + 1, `${name} ${art}: Spielfeld und Knöpfe ohne Scrollen sichtbar (${Math.round(r.unten)} von ${r.hoch} px)`);
+    ok(r.breit >= 200 && r.hochFeld >= 140, `${name} ${art}: Spielfeld groß genug (${Math.round(r.breit)} × ${Math.round(r.hochFeld)})`);
+    await foto("spiel-" + art);
+    await page.click("[data-act=spiel-abbrechen]");
+    await page.click(".spiel-ende [data-act=spielhalle]");
+  }
   await page.click("[data-act=heim]");
   await langDruecken(page, "#eltern-knopf", 450);
   for (const r of ["fortschritt", "plan", "einst", "sicherung"]) { await page.click(`[data-act=eltern-reiter][data-arg=${r}]`); await messe(page, `${name} Eltern ${r}`); }

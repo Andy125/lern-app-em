@@ -41,6 +41,8 @@ await page.reload();
 const s = await stand(page);
 ok(s.tier.name === "Hoppel" && s.muenzen === 5 && s.einst.etappe === 6 && typeof s.fortschritt === "object", "alter Stand wird mit Standardwerten ergänzt");
 ok((await page.locator(".mission").count()) === 1, "alter Stand startet normal");
+ok(s.tokens === 0 && s.theme === "nacht" && s.spiele.run.best === 0 && s.einst.spieleProTag === 5 && s.punkte === 0, "Stand aus Version 4: Tokens, Rekorde und Design ergänzt");
+ok((await page.getAttribute("html", "data-theme")) === "nacht", "Design wird angewendet");
 
 // Mitten in der Etappe schließen: geschaffte Etappen bleiben, die Mission geht dort weiter
 await page.click("[data-act=mission]");
@@ -56,7 +58,7 @@ const z = await oeffne({ test: { heute: "2026-11-13" } });
 await z.page.evaluate(() => { window.__LN_TEST.einfrieren = true; });
 await z.page.evaluate(([k, b]) => { const st = { name: "Testkind", tier: { art: "fuchs", name: "F" }, erstellt: 1, tage: { "2026-11-12": { sek: 600, aufgaben: 18, richtig: 15, etappen: 3, mission: true } } }; localStorage.setItem(k, JSON.stringify(st)); localStorage.setItem(b, JSON.stringify(st)); }, [KEY, BAK]);
 await z.page.reload();
-ok((await z.page.textContent("[data-act=mission]")).includes("Los geht"), "neuer Tag: neue Mission");
+ok((await z.page.textContent("[data-act=mission]")).trim() === "Start", "neuer Tag: neue Mission");
 ok((await z.page.textContent(".fuss")).includes("1 Tag"), "gestern zählt in der Woche");
 ok(fehler.length === 0 && z.fehler.length === 0, "keine Fehler in der Konsole: " + fehler.concat(z.fehler).join(" | "));
 await z.zu();

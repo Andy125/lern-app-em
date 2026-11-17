@@ -259,6 +259,24 @@ for (const roh of [null, undefined, "kaputt", 42, [], { muenzen: "abc" }, { fort
   ok(L.stufe(0) === 0 && L.stufe(300) === 1 && L.stufe(2499) === 2 && L.stufe(9999) === 3, "Wachstums-Stufen");
 }
 
+// ---------- Level, Tokens, Spielhalle ----------
+{
+  ok([0, 99, 100, 299, 300, 599, 600, 1000].map(L.level).join() === "1,1,2,2,3,3,4,5", "Level aus XP: 100, 300, 600, 1000 …");
+  for (let n = 1; n < 30; n++) ok(L.level(L.levelStart(n)) === n && L.level(L.levelStart(n + 1) - 1) === n, `Level ${n} beginnt genau bei ${L.levelStart(n)} XP`);
+  ok(L.rang(1) === "Rookie" && L.rang(3) === "Explorer" && L.rang(9) === "Pro" && L.rang(20) === "Legend", "Ränge");
+  ok(L.tokenNoetig(6) === 5 && L.tokenNoetig(8) === 7 && L.tokenNoetig(4) === 4, "Token: 80 % auf Anhieb (5 von 6)");
+  ok(L.LOHN.richtig === 1 && L.LOHN.spaeter === 0, "Münzen nur für Richtiges auf Anhieb");
+  const s = L.defaults(); const H = "2026-11-17";
+  ok(!L.spielStart(s, "run", H).ok && L.spielStart(s, "run", H).grund === "tokens", "ohne Token kein Spiel");
+  s.tokens = 9; s.einst.spieleProTag = 2;
+  ok(L.spielStart(s, "run", H).ok && L.spielStart(s, "bloecke", H).ok && s.tokens === 7, "Spiel kostet einen Token");
+  ok(L.spielStart(s, "run", H).grund === "limit" && s.tokens === 7, "Tageslimit: kein drittes Spiel, kein Token weg");
+  ok(L.spielEnde(s, "run", 120).rekord && !L.spielEnde(s, "run", 80).rekord && s.spiele.run.best === 120, "Rekord wird gemerkt");
+  const m = L.migrate({ tokens: -3, spiele: { run: { best: "x" } }, theme: "gibtsnicht", einst: { spieleProTag: 99 } });
+  ok(m.tokens === 0 && m.spiele.run.best === 0 && m.spiele.bloecke.best === 0 && m.theme === "nacht" && m.einst.spieleProTag === 20, "Spielhalle-Daten werden bereinigt");
+  ok(L.THEMES.every((t) => t.id && t.name && t.ab >= 1) && L.THEMES.filter((t) => t.ab === 1).length >= 2, "Themes mit Freischalt-Level");
+}
+
 // ---------- Etappen und Probe ----------
 for (const fach of FAECHER) {
   const s = L.defaults();

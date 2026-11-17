@@ -29,6 +29,8 @@ jobs:
         run: node tools/test-logic.mjs
       - name: Version und Offline-Liste
         run: node tools/test-version.mjs
+      - name: Spiele (Regeln und schaffbare Strecken)
+        run: node tools/test-spiele.mjs
       - name: Browser installieren
         run: npx playwright install --with-deps chromium
       - name: Ablauf wie ein Kind (Mission, Tier, Probe, Eltern, Sicherung)

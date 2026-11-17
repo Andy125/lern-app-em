@@ -2,7 +2,7 @@
 // Tier, Fehlerkiste, Frei üben, Lernkarten, Probe) und prüft die Eltern-Übersicht.
 // Aufruf: node tools/e2e.mjs [ordner-für-screenshots]
 import fs from "node:fs";
-import { oeffne, einrichten, aufgabe, ansicht, stand, loese, falsch, spieleEtappe, langDruecken, pruefer, VERSION } from "./helfer.mjs";
+import { oeffne, einrichten, aufgabe, ansicht, stand, loese, falsch, spieleEtappe, langDruecken, levelUpZu, pruefer, VERSION } from "./helfer.mjs";
 
 const bilder = process.argv[2];
 if (bilder) fs.mkdirSync(bilder, { recursive: true });
@@ -12,6 +12,7 @@ const { page, fehler, zu } = await oeffne();
 const FID = await page.evaluate(() => window.LN_FAECHER[0].id);
 const keinPlatzhalter = async (wo) => ok(!(await page.textContent("body")).includes("{hund"), `${wo}: kein {hund}-Platzhalter sichtbar`);
 const foto = async (n) => { if (bilder) await page.screenshot({ path: `${bilder}/${n}.png`, fullPage: true }); };
+const heim = async () => { await levelUpZu(page); await page.click("[data-act=heim]"); };
 
 // ---------- Willkommen ----------
 ok((await page.textContent("#version")).includes(`Version ${VERSION}`), "Versionsnummer oben sichtbar");
@@ -21,9 +22,12 @@ ok((await ansicht(page)) === "willkommen", "ohne Namen geht es nicht weiter");
 await einrichten(page, "Testkind", "hund", "Flocke");
 let s = await stand(page);
 ok(s.name === "Testkind" && s.tier.art === "hund" && s.tier.name === "Flocke" && s.muenzen === 10, "Name, Tier und Willkommensgeschenk gespeichert");
-ok((await page.textContent(".sprechblase")).includes("Wusstest du"), "Tier erzählt einen Fakt zum Thema");
+ok((await page.textContent(".hund-karte .sprechblase")).includes("Fun Fact"), "Hund erzählt einen Fakt zum Thema");
+ok((await page.textContent(".profil-kopf")).includes("Hey Testkind") && (await page.textContent(".level-zeile")).includes("Level 1"), "Begrüßung mit Name und Level 1");
+ok(s.tokens === 0 && (await page.locator(".chips .tokens").textContent()).includes("0"), "zu Beginn keine Tokens");
+ok(!(await page.textContent("body")).includes(" · "), "keine Mittelpunkte als Trenner");
 await keinPlatzhalter("Start");
-ok((await page.textContent(".kacheln")).includes("Flocke"), "Tiername auf der Startseite");
+ok((await page.textContent(".hund-karte")).includes("Flocke"), "Tiername auf der Startseite");
 ok(await page.locator("[data-act=kiste]").isDisabled(), "leere Fehlerkiste ist aus");
 await foto("02-start");
 
@@ -65,6 +69,14 @@ while ((await ansicht(page)) === "runde") {
 ok((await ansicht(page)) === "etappe-ende", "Etappe 1 geschafft");
 await foto("06-etappe-ende");
 s = await stand(page);
+{
+  const b = await page.evaluate(() => window.__LN.ui().runde.belohnung);
+  const n = await page.evaluate(() => window.__LN.ui().runde.anzahl);
+  ok(b.anzahl === n && b.ersteRichtig <= n - 2, `wiederholte Aufgaben zählen nicht als «auf Anhieb» (${b.ersteRichtig} von ${n})`);
+  ok(s.tokens === (b.ersteRichtig >= Math.ceil(n * 0.8) ? 1 : 0), `Token nur mit ${Math.ceil(n * 0.8)} von ${n} auf Anhieb (bekommen: ${s.tokens})`);
+  ok((await page.textContent("main")).includes(`${b.ersteRichtig} von ${n} auf Anhieb`), "Ergebnis der Etappe sichtbar");
+}
+await levelUpZu(page);
 ok(s.tage[H].etappen === 1 && !s.tage[H].mission, "eine Etappe gezählt");
 await page.click("[data-act=bewegung]");
 ok((await ansicht(page)) === "bewegung" && (await page.locator("#pause-weiter").isDisabled()), "Bewegungspause, Weiter erst nach der Zeit");
@@ -84,17 +96,81 @@ ok((await ansicht(page)) === "mission-ende", "Tagesmission geschafft");
 await foto("08-mission-ende");
 s = await stand(page);
 ok(s.tage[H].mission === true && s.tage[H].etappen === 3, "Mission im Tag eingetragen");
-ok(s.muenzen > 40, `Münzen verdient (${s.muenzen})`);
+ok(s.muenzen > 20 && s.muenzen < 60, `Münzen verdient, aber nicht zu viele (${s.muenzen})`);
+ok(s.tokens >= 3, `Tokens: zwei fehlerfreie Etappen und die Mission (${s.tokens})`);
+ok(s.punkte >= 200, `XP gesammelt (${s.punkte})`);
 ok(s.tage[H].aufgaben >= 18 && s.tage[H].sek >= 0, "Aufgaben gezählt");
-await page.click("[data-act=heim]");
+ok((await page.locator("[data-act=levelup-zu]").count()) === 1 || (await page.evaluate(() => window.LN.level(window.__LN.stand().punkte))) >= 2, "Level-Up nach der Mission");
+await foto("08b-levelup");
+await heim();
 ok((await page.textContent("[data-act=mission]")).includes("Bonus"), "danach: Bonus-Runde");
+ok((await page.textContent(".level-zeile")).match(/Level [2-9]/), "Level gestiegen");
 ok((await page.locator(".etappe-punkt.fertig").count()) === 3, "drei Haken bei den Etappen");
 
 // ---------- Tier ----------
-await page.click(".kachel[data-act=tier]");
+// ---------- Spielhalle ----------
+{
+  const tk = (await stand(page)).tokens;
+  await page.click(".arcade [data-act=spielhalle]");
+  ok((await ansicht(page)) === "spielhalle" && (await page.locator("[data-act=spiel-start]").count()) === 2, "Spielhalle mit zwei Spielen");
+  await foto("08c-spielhalle");
+  await page.click("[data-act=spiel-start][data-arg=run]");
+  ok((await ansicht(page)) === "spiel" && (await stand(page)).tokens === tk - 1, "Spielen kostet einen Token");
+  ok((await stand(page)).tage[H].spiele === 1 && (await stand(page)).spiele.run.runden === 1, "Spielrunde gezählt");
+  await page.waitForTimeout(900);
+  ok((await page.evaluate(() => window.__LN.spiel().zustand().strecke)) > 50, "der Hund läuft");
+  const vorSprung = await page.evaluate(() => window.__LN.spiel().zustand().fuss);
+  await page.click("canvas.spielfeld");
+  await page.waitForTimeout(150);
+  ok((await page.evaluate(() => window.__LN.spiel().zustand().fuss)) < vorSprung, "Tippen lässt den Hund springen");
+  await foto("08d-run");
+  // Spiel durch Zusammenstoß beenden lassen
+  await page.evaluate(() => { const z = window.__LN.spiel().zustand(); z.vorbei = true; z.grund = "hindernis"; z.punkte = 321; });
+  await page.waitForSelector(".spiel-ende");
+  ok((await page.textContent(".spiel-ende")).includes("321") && (await stand(page)).spiele.run.best === 321, "Ergebnis und Rekord gespeichert");
+  await foto("08e-run-ende");
+  // erneutes Zeichnen startet kein Gratisspiel
+  await page.evaluate(() => window.__LN.speichern());
+  await page.click(".spiel-ende [data-act=spielhalle]");
+  ok((await ansicht(page)) === "spielhalle" && (await stand(page)).tokens === tk - 1, "zurück in der Spielhalle, kein Token verloren");
+  // Blöcke
+  await page.click("[data-act=spiel-start][data-arg=bloecke]");
+  await page.waitForTimeout(300);
+  const z0 = await page.evaluate(() => { const z = window.__LN.spiel().zustand(); return { x: z.teil.x, r: z.teil.rot, typ: z.teil.typ }; });
+  await page.click("[data-spiel=links]");
+  await page.click("[data-spiel=drehen]");
+  const z1 = await page.evaluate(() => { const z = window.__LN.spiel().zustand(); return { x: z.teil.x, r: z.teil.rot }; });
+  ok(z1.x === z0.x - 1 && (z1.r !== z0.r || z0.typ === "O"), `Blöcke: Knöpfe verschieben und drehen (${z0.typ})`);
+  await page.click("[data-spiel=fallen]");
+  ok((await page.evaluate(() => window.__LN.spiel().zustand().punkte)) > 0, "Fallenlassen gibt Punkte");
+  await foto("08f-bloecke");
+  await page.click("[data-act=spiel-abbrechen]");
+  ok((await page.textContent(".spiel-ende")).includes("Spiel beendet"), "Abbrechen zeigt das Ergebnis");
+  await page.click(".spiel-ende [data-act=spielhalle]");
+  // Tageslimit
+  await page.evaluate(() => { const s = window.__LN.stand(); s.tokens = 5; s.einst.spieleProTag = 2; window.__LN.speichern(); });
+  await heim(); await page.click(".arcade [data-act=spielhalle]");
+  ok(await page.locator("[data-act=spiel-start][data-arg=run]").isDisabled(), "nach zwei Runden ist die Spielhalle für heute zu");
+  ok((await page.textContent("main")).includes("Für heute ist die Spielhalle zu"), "Hinweis aufs Tageslimit");
+  await page.evaluate(() => { const s = window.__LN.stand(); s.einst.spieleProTag = 5; s.tokens = 0; window.__LN.speichern(); });
+  await heim(); await page.click(".arcade [data-act=spielhalle]");
+  ok(await page.locator("[data-act=spiel-start][data-arg=run]").isDisabled(), "ohne Tokens kein Spiel");
+  await heim();
+}
+
+// ---------- Tier ----------
+await page.click(".hund-karte");
 const m0 = (await stand(page)).muenzen;
 ok((await page.locator("[data-act=kaufen][data-arg=kuchen]").count()) === 0 && (await page.locator("[data-act=kaufen][data-arg=kauknochen]").count()) === 1, "Hund bekommt nur Hundefutter, keinen Kuchen");
 ok((await page.locator(".laden-ding svg.laden-bild").count()) >= 5 && (await page.locator(".muenzen svg.muenze").count()) === 1, "gezeichnete Bilder im Laden und goldene Münze oben");
+// App-Design: freigeschaltet nach Level
+await page.click("[data-act=tier-reiter][data-arg=design]");
+ok(!(await page.locator("[data-act=theme][data-arg=hell]").isDisabled()) && (await page.locator("[data-act=theme][data-arg=galaxy]").isDisabled()), "helles Design frei, Galaxy erst ab Level 8");
+await page.click("[data-act=theme][data-arg=hell]");
+ok((await stand(page)).theme === "hell" && (await page.getAttribute("html", "data-theme")) === "hell", "Design gewechselt");
+await foto("09a-design-hell");
+await page.click("[data-act=theme][data-arg=nacht]");
+await page.click("[data-act=tier-reiter][data-arg=futter]");
 await page.click("[data-act=kaufen][data-arg=leckerli]");
 s = await stand(page);
 ok(s.muenzen === m0 - 4 && s.gefuettert === 1, "Leckerli gefüttert");
@@ -125,7 +201,7 @@ ok((await page.locator(".herzen").count()) === 1, "Streicheln zeigt Herzen");
 // Die Fehler aus der Mission sind nach zweimal richtig schon wieder raus. Für den Test drei Fehler hineinlegen.
 ok(((await stand(page)).fehler[FID] || []).length <= 2, "Fehler aus der Mission sind geübt und weitgehend raus");
 await page.evaluate((fid) => { const s = window.__LN.stand(); const f = window.LN_FAECHER[0]; s.fehler[fid] = window.LN.fachTeile(f).filter((t, i) => i % 9 === 0).slice(0, 3).map((t) => t.id); window.__LN.speichern(); }, FID);
-await page.click("[data-act=heim]");
+await heim();
 const kiste = (await stand(page)).fehler[FID].length;
 ok(kiste >= 1 && !(await page.locator("[data-act=kiste]").isDisabled()), "Fehlerkiste hat Einträge");
 await page.click("[data-act=kiste]");
@@ -134,7 +210,7 @@ ok(nKiste === Math.min(10, kiste), `Fehlerkiste übt genau die Fehler (${nKiste}
 ok((await ansicht(page)) === "runde-ende", "Fehlerkiste-Runde fertig");
 
 // ---------- Frei üben ----------
-await page.click("[data-act=heim]");
+await heim();
 await page.click("[data-act=themen]");
 ok((await page.locator(".thema-karte").count()) >= 2, "Themen zur Auswahl");
 await foto("10-themen");
@@ -143,7 +219,7 @@ await spieleEtappe(page);
 ok((await ansicht(page)) === "runde-ende", "Thema geübt");
 
 // ---------- Lernkarten ----------
-await page.click("[data-act=heim]");
+await heim();
 await page.click("[data-act=karten]");
 ok((await page.locator(".lernkarte").count()) >= 3, "Lernkarten sichtbar");
 await page.click("[data-act=karten-thema] >> nth=1");
@@ -151,7 +227,7 @@ ok((await page.locator(".lernkarte .fig svg").count()) >= 1 || (await page.locat
 await foto("11-lernkarten");
 
 // ---------- Forschen & Basteln ----------
-await page.click("[data-act=heim]");
+await heim();
 await page.click("[data-act=auftraege]");
 ok((await page.locator(".auftrag").count()) >= 4, "Mitmach-Aufträge sichtbar");
 await keinPlatzhalter("Aufträge");
@@ -160,12 +236,12 @@ const mA = (await stand(page)).muenzen;
 const aid = await page.getAttribute("[data-act=auftrag-fertig] >> nth=0", "data-arg");
 await page.click("[data-act=auftrag-fertig] >> nth=0");
 s = await stand(page);
-ok(s.auftraege[aid] === H && s.muenzen === mA + 8, "Auftrag geschafft: +8 Münzen, Datum gespeichert");
+ok(s.auftraege[aid] === H && s.muenzen === mA + 5, "Challenge geschafft: +5 Münzen, Datum gespeichert");
 ok((await page.locator(".auftrag.erledigt").count()) === 1, "Auftrag als geschafft markiert");
 ok((await page.locator(`[data-act=auftrag-fertig][data-arg="${aid}"]`).count()) === 0, "kein zweites Mal Münzen");
 
 // ---------- Probe ----------
-await page.click("[data-act=heim]");
+await heim();
 await page.click("[data-act=probe-start]");
 await page.click("[data-act=probe-los]");
 await foto("12-probe");
@@ -176,8 +252,9 @@ ok((await ansicht(page)) === "probe-ende", "Probe fertig");
 ok((await page.textContent("main")).includes("100 %"), "alles richtig: 100 %");
 s = await stand(page);
 ok(s.proben[FID].length === 1 && s.proben[FID][0].prozent === 100, "Probe gespeichert");
+ok((await page.locator(".belohnung .neu").count()) === 1, "Probe ab 80 %: ein Token");
 await foto("13-probe-ende");
-await page.click("[data-act=heim]");
+await heim();
 
 // ---------- Eltern ----------
 await page.click("#eltern-knopf");
@@ -188,7 +265,7 @@ ok((await ansicht(page)) === "start", "falsche Rechnung öffnet nicht");
 const tor2 = await page.evaluate(() => window.__LN.ui().tor);
 await page.fill("#tor-eingabe", String(tor2.a * tor2.b)); await page.click("[data-act=tor-ok]");
 ok((await ansicht(page)) === "eltern", "richtige Rechnung öffnet die Eltern-Übersicht");
-await page.click("[data-act=heim]");
+await heim();
 // Langer Druck mit dem Finger (Touch-Ereignisse wie auf dem iPad)
 {
   await page.locator("#eltern-knopf").scrollIntoViewIfNeeded();
@@ -201,7 +278,7 @@ await page.click("[data-act=heim]");
   await page.waitForTimeout(350);
   await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
   ok((await ansicht(page)) === "eltern", "langer Druck mit dem Finger öffnet die Eltern-Übersicht");
-  await page.click("[data-act=heim]");
+  await heim();
 }
 await langDruecken(page, "#eltern-knopf", 450);
 ok((await ansicht(page)) === "eltern", "langer Druck mit der Maus öffnet die Eltern-Übersicht");
@@ -219,18 +296,19 @@ await page.click("[data-act=eltern-reiter][data-arg=einst]");
 await page.selectOption("#e-etappe", "4");
 await page.uncheck("#e-pause");
 await page.check("#e-ruhig");
+await page.selectOption("#e-spiele", "3");
 s = await stand(page);
-ok(s.einst.etappe === 4 && s.einst.pause === false && s.einst.ruhig === true, "Einstellungen gespeichert");
+ok(s.einst.etappe === 4 && s.einst.pause === false && s.einst.ruhig === true && s.einst.spieleProTag === 3, "Einstellungen gespeichert");
 ok(await page.evaluate(() => document.body.classList.contains("ruhig")), "ruhiger Modus aktiv");
 await page.fill("#e-tiername", "Fuchsi");
 await page.fill("#e-hund", "Testhund");
 await page.click("[data-act=namen-speichern]");
 ok((await stand(page)).tier.name === "Fuchsi" && (await stand(page)).hund === "Testhund", "Tier umbenannt, Hundename gespeichert");
-await page.click("[data-act=heim]");
+await heim();
 await page.click("[data-act=karten]");
 ok((await page.textContent("main")).includes("Testhund") && !(await page.textContent("main")).includes("Fuchsi fällt"), "Warum-Texte nennen den Hund zu Hause");
 await keinPlatzhalter("Lernkarten mit Hundename");
-await page.click("[data-act=heim]");
+await heim();
 ok((await page.textContent(".countdown")).includes("14 Tage") && (await page.textContent(".countdown")).includes("Bio-Arbeit"), "Countdown zur Arbeit");
 ok((await page.textContent(".mission")).includes("Bio: Neues zu «Das Skelett»") && (await page.textContent(".mission")).includes("Aufwärmen Englisch"), "Mission zeigt Schwerpunkt Bio (Arbeit zuerst) und Aufwärmen Englisch");
 
@@ -241,7 +319,7 @@ ok((await stand(page)).fach === "englisch" && (await page.locator(".fach-tab.akt
 await page.click("[data-act=karten]");
 ok((await page.locator("table.vokabeln tbody tr").count()) >= 15, "Vokabelliste in den Lernkarten");
 ok((await page.locator("[data-act=sag-en]").count()) >= 15, "jede Vokabel zum Anhören");
-await page.click("[data-act=heim]");
+await heim();
 await page.click("[data-act=themen]");
 await page.click("[data-act=thema][data-arg=hunde-englisch]");
 await page.click("[data-act=etappe-los]");
@@ -259,7 +337,7 @@ await foto("16-englisch");
 await page.click("[data-act=weiter]");
 while ((await ansicht(page)) === "runde") { const st = await page.evaluate(() => window.__LN.ui().runde.status); if (st === "richtig" || st === "loesung") await page.click("[data-act=weiter]"); else await loese(page); }
 ok((await stand(page)).fortschritt.englisch && Object.keys((await stand(page)).fortschritt.englisch).length >= 5, "Fortschritt im Fach Englisch");
-await page.click("[data-act=heim]");
+await heim();
 await page.click("[data-act=fach][data-arg=bio]");
 await keinPlatzhalter("Englisch");
 

@@ -1,6 +1,6 @@
 # Lernnest
 
-Lern-App fürs iPad für die Vorbereitung auf Klassenarbeiten. Jeden Tag eine Tagesmission von rund 15 Minuten: drei kurze Etappen mit einer Bewegungspause dazwischen. Mit den Münzen vom Üben pflegt das Kind sein eigenes Tier, füttert es, zieht es an und richtet sein Zimmer ein. Kein Druck, keine Strafen, Sterne gehen nie verloren.
+Lern-App fürs iPad für die Vorbereitung auf Klassenarbeiten, gestaltet für junge Teenager (dunkles Design, Level und Ränge, Spielhalle). Jeden Tag eine Mission von rund 15 Minuten: drei kurze Etappen mit einer Bewegungspause dazwischen. Wer genau arbeitet, verdient Tokens für zwei kleine Spiele. Mit Münzen pflegt das Kind seinen Hund. Keine Strafen, Sterne und XP gehen nie verloren.
 
 Die App ist eine Web-App ohne Build-Schritt (reines JavaScript im Ordner `public/`), läuft offline und wird über GitHub Pages veröffentlicht.
 
@@ -20,10 +20,13 @@ Oben rechts steht die Versionsnummer. So sieht man nach einem Update, ob die neu
 - **Hilfe in Stufen**: auf Wunsch ein Tipp; nach dem ersten Fehler ein Tipp, Richtiges bleibt stehen; nach dem zweiten Fehler die Lösung mit Erklärung und Merkhilfe. Die Aufgabe kommt in derselben Etappe noch einmal.
 - **Fehlerkiste**: Falsches kommt wieder, bis es zweimal hintereinander richtig war.
 - **Rechtschreibung im Sachfach**: Geschriebene Begriffe müssen erkennbar sein («Bluete», «Amfibien» zählen), die richtige Schreibweise wird freundlich gezeigt. Ein anderer Fachbegriff gilt nie als richtig. Für Rechtschreib-Aufgaben gibt es einen strengen Modus.
-- **Warum?** Jedes Thema beginnt mit einer Frage aus dem Alltag des Kindes (zum Beispiel zum eigenen Hund) und erklärt, wozu man das wissen will. Nach Aufgaben erscheint ab und zu ein kurzer «Darum ist das wichtig»-Satz, und das Tier erzählt auf der Startseite «Wusstest du?»-Fakten.
-- **Forschen & Basteln**: echte Aufträge zum Beobachten, Bauen (zum Beispiel mit Ofenknete) und Bewegen. Wer einen geschafft hat, tippt «Geschafft!» und bekommt Münzen.
+- **Warum?** Jedes Thema beginnt mit einer Frage aus dem Alltag des Kindes (zum Beispiel zum eigenen Hund) und erklärt, wozu man das wissen will. Nach Aufgaben erscheint ab und zu ein kurzer «Darum ist das wichtig»-Satz, und der Hund erzählt auf der Startseite einen «Fun Fact».
+- **Challenges**: echte Aufträge zum Beobachten, Bauen (zum Beispiel mit Ofenknete) und Bewegen. Wer einen geschafft hat, tippt «Geschafft!» und bekommt Münzen und XP.
 - **Lernkarten** zum Nachlesen, mit Vorlesen.
 - **Probe-Arbeit** wie eine echte Arbeit: keine Rückmeldung zwischendurch, Überspringen möglich, am Ende Ergebnis je Thema.
+- **Belohnung nach Leistung**: Münzen gibt es nur für Aufgaben, die auf Anhieb richtig sind (+1, alle 5 in Folge +1 extra). XP: 10 auf Anhieb, 3 nach einem Fehler. Eine Etappe bringt 2 Münzen ab der Hälfte richtig und 10 XP ab 80 %. Wiederholte Aufgaben zählen nicht als «auf Anhieb».
+- **Level und Ränge**: Level 2 ab 100 XP, jedes weitere Level braucht 100 XP mehr. Ränge Rookie, Explorer (3), Pro (6), Expert (10), Legend (15). Mit dem Level werden App-Designs frei (Nacht, Hell, Ozean ab 3, Sunset ab 5, Galaxy ab 8).
+- **Spielhalle**: Ein Token ist eine Spielrunde. Tokens gibt es für jede Etappe mit mindestens 80 % auf Anhieb (5 von 6), für die geschaffte Mission und für eine Probe-Arbeit ab 80 %. Zwei Spiele: «Run» (der eigene Hund springt über Hindernisse und Gruben, sammelt Knochen) und «Blöcke» (fallende Steine, vier Minuten). Höchstens 5 Runden am Tag, einstellbar.
 - **Das Tier**: Hund (Labrador in Foxred), Katze, Hase, Fuchs, Panda oder Hamster, eigene Zeichnungen. Es wächst mit den Punkten (Baby oder Welpe, Klein, Groß, Held). Bezahlt wird mit goldenen Münzen. Der Hund bekommt nur Hundefutter (Wasser, Futter, Leckerli, Hundekeks, Kauknochen, Kaustange), ins Zimmer kommen Hundekorb, Decke, Napf und Spielzeug.
 
 ## Ältere iPads
@@ -98,6 +101,7 @@ npm ci                                  # einmal: Playwright installieren
 npx playwright install chromium         # einmal: Browser für die Tests
 npm test                                # Logik, Inhalte, Version (schnell)
 node tools/test-logic.mjs               # jede Aufgabe aus jedem Startwert unabhängig nachgerechnet
+node tools/test-spiele.mjs              # Spielregeln; ein Autopilot zeigt, dass jede Run-Strecke schaffbar ist
 node tools/e2e.mjs [ordner]             # spielt die App wie ein Kind durch, optional mit Screenshots
 node tools/e2e-speicher.mjs             # Spielstand: Neuladen, Kopie, IndexedDB, kaputter und alter Stand
 node tools/e2e-geraete.mjs [ordner]     # iPad hochkant, quer, Handy: Überlauf, Tippflächen, Schriftgröße
