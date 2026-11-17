@@ -418,7 +418,10 @@
       hund: "", // Name des echten Hundes zu Hause, nur für die Warum-Texte
       auftraege: {}, // auftragId -> Datum, an dem er geschafft wurde
       muenzen: 0,
-      punkte: 0,
+      punkte: 0, // XP
+      tokens: 0, // Spiel-Tokens für die Spielhalle
+      spiele: { run: { best: 0, runden: 0 }, bloecke: { best: 0, runden: 0 } },
+      theme: "nacht",
       gefuettert: 0,
       besitz: [], // gekaufte Dinge (Zubehör und Zimmer)
       traegt: [], // angezogenes Zubehör
@@ -427,7 +430,7 @@
       tage: {}, // "YYYY-MM-DD" -> { sek, aufgaben, richtig, etappen, mission }
       plan: {}, // fachId -> { start, arbeit, titel }
       proben: {}, // fachId -> [{ datum, prozent, themen }]
-      einst: { etappe: 6, pauseSek: 30, pause: true, ruhig: false, vorlesen: false, toene: true, probeAnzahl: 12 },
+      einst: { etappe: 6, pauseSek: 30, pause: true, ruhig: false, vorlesen: false, toene: true, probeAnzahl: 12, spieleProTag: 5 },
       fach: null,
       lastBackup: null,
       erstellt: null,
@@ -446,6 +449,9 @@
     if (istObj(raw.auftraege)) for (const id of Object.keys(raw.auftraege)) if (gueltigesDatum(raw.auftraege[id])) s.auftraege[id] = raw.auftraege[id];
     s.muenzen = Math.floor(zahl(raw.muenzen, 0, 0));
     s.punkte = Math.floor(zahl(raw.punkte, 0, 0));
+    s.tokens = Math.floor(zahl(raw.tokens, 0, 0, 99));
+    if (istObj(raw.spiele)) for (const a of ["run", "bloecke"]) if (istObj(raw.spiele[a])) s.spiele[a] = { best: Math.floor(zahl(raw.spiele[a].best, 0, 0)), runden: Math.floor(zahl(raw.spiele[a].runden, 0, 0)) };
+    if (typeof raw.theme === "string" && THEMES.some((t) => t.id === raw.theme)) s.theme = raw.theme;
     s.gefuettert = Math.floor(zahl(raw.gefuettert, 0, 0));
     if (Array.isArray(raw.besitz)) s.besitz = [...new Set(raw.besitz.filter((x) => typeof x === "string"))];
     if (Array.isArray(raw.traegt)) s.traegt = [...new Set(raw.traegt.filter((x) => typeof x === "string" && s.besitz.includes(x)))];
@@ -461,7 +467,7 @@
     if (istObj(raw.fehler)) for (const f of Object.keys(raw.fehler)) if (Array.isArray(raw.fehler[f])) s.fehler[f] = [...new Set(raw.fehler[f].filter((x) => typeof x === "string"))];
     if (istObj(raw.tage)) for (const t of Object.keys(raw.tage)) {
       const x = raw.tage[t]; if (!gueltigesDatum(t) || !istObj(x)) continue;
-      s.tage[t] = { sek: zahl(x.sek, 0, 0), aufgaben: Math.floor(zahl(x.aufgaben, 0, 0)), richtig: Math.floor(zahl(x.richtig, 0, 0)), etappen: Math.floor(zahl(x.etappen, 0, 0)), mission: !!x.mission };
+      s.tage[t] = { sek: zahl(x.sek, 0, 0), aufgaben: Math.floor(zahl(x.aufgaben, 0, 0)), richtig: Math.floor(zahl(x.richtig, 0, 0)), etappen: Math.floor(zahl(x.etappen, 0, 0)), mission: !!x.mission, spiele: Math.floor(zahl(x.spiele, 0, 0)) };
     }
     if (istObj(raw.plan)) for (const f of Object.keys(raw.plan)) {
       const p = raw.plan[f]; if (!istObj(p)) continue;
@@ -473,6 +479,7 @@
       s.einst.etappe = Math.floor(zahl(e.etappe, d.einst.etappe, 3, 12));
       s.einst.pauseSek = Math.floor(zahl(e.pauseSek, d.einst.pauseSek, 10, 120));
       s.einst.probeAnzahl = Math.floor(zahl(e.probeAnzahl, d.einst.probeAnzahl, 6, 40));
+      s.einst.spieleProTag = Math.floor(zahl(e.spieleProTag, d.einst.spieleProTag, 0, 20));
       for (const b of ["pause", "ruhig", "vorlesen", "toene"]) if (typeof e[b] === "boolean") s.einst[b] = e[b];
     }
     if (typeof raw.fach === "string") s.fach = raw.fach;
@@ -684,9 +691,34 @@
     else { s.besitz.push(id); if (SHOP.zubehoer.includes(d) && !s.traegt.includes(id)) s.traegt.push(id); }
     return { ok: true, ding: d, snack };
   }
+  // Level aus XP: Level n beginnt bei 50·n·(n-1) XP (100, 300, 600, 1000, 1500 …)
+  const levelStart = (n) => 50 * n * (n - 1);
+  function level(xp) { let n = 1; while (levelStart(n + 1) <= xp) n++; return n; }
+  const RAENGE = [{ ab: 1, name: "Rookie" }, { ab: 3, name: "Explorer" }, { ab: 6, name: "Pro" }, { ab: 10, name: "Expert" }, { ab: 15, name: "Legend" }];
+  const rang = (lv) => RAENGE.filter((r) => lv >= r.ab).pop().name;
+  const THEMES = [
+    { id: "nacht", name: "Nacht", ab: 1 }, { id: "hell", name: "Hell", ab: 1 },
+    { id: "ozean", name: "Ozean", ab: 3 }, { id: "sunset", name: "Sunset", ab: 5 }, { id: "galaxy", name: "Galaxy", ab: 8 },
+  ];
+  // Token für eine Etappe: mindestens 80 % auf Anhieb richtig (bei 6 Aufgaben: 5)
+  const tokenNoetig = (n) => Math.ceil(n * LOHN.tokenQuote);
+  function spielStart(s, art, heute) {
+    const t = s.tage[heute] || (s.tage[heute] = { sek: 0, aufgaben: 0, richtig: 0, etappen: 0, mission: false, spiele: 0 });
+    if (s.tokens < 1) return { ok: false, grund: "tokens" };
+    if ((t.spiele || 0) >= s.einst.spieleProTag) return { ok: false, grund: "limit" };
+    s.tokens--; t.spiele = (t.spiele || 0) + 1; s.spiele[art].runden++;
+    return { ok: true };
+  }
+  function spielEnde(s, art, punkte) {
+    const neu = punkte > s.spiele[art].best;
+    if (neu) s.spiele[art].best = Math.floor(punkte);
+    return { rekord: neu };
+  }
   const STUFEN = [{ ab: 0, name: "Baby" }, { ab: 300, name: "Klein" }, { ab: 1000, name: "Groß" }, { ab: 2500, name: "Held" }];
   const stufe = (punkte) => { let i = 0; STUFEN.forEach((x, j) => { if (punkte >= x.ab) i = j; }); return i; };
-  const LOHN = { richtig: 2, spaeter: 1, etappe: 5, mission: 10, probe: 10, auftrag: 8, punkteRichtig: 10, punkteSpaeter: 5, punkteAuftrag: 30 };
+  // Belohnungen: Münzen nur für Richtiges auf Anhieb, Tokens nur für gute Etappen (mindestens 80 % auf Anhieb)
+  const LOHN = { richtig: 1, spaeter: 0, combo: 5, comboBonus: 1, etappe: 2, mission: 3, probe: 3, auftrag: 5,
+    punkteRichtig: 10, punkteSpaeter: 3, punkteEtappe: 10, punkteMission: 20, punkteAuftrag: 30, tokenQuote: 0.8 };
   // Mitmach-Auftrag erledigt: einmal Münzen, danach nur noch Freude
   function auftragErledigt(s, id, heute) {
     if (s.auftraege[id]) return false;
@@ -700,6 +732,7 @@
     heuteISO, tageBis, plusTage, gueltigesDatum,
     defaults, migrate, record, teilStand, bereitschaft, wackelt, sterneFuer,
     buildEtappe, buildProbe, planListe, planTag, etappenFuer,
+    levelStart, level, rang, RAENGE, THEMES, tokenNoetig, spielStart, spielEnde,
     SHOP, laden, shopDing, kaufe, varianten, teileVon, ueberlappt, STUFEN, stufe, LOHN,
   };
   root.LN = L;

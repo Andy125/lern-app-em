@@ -1,7 +1,7 @@
 // Offline-Modus: mit Internet immer die neueste Version laden, ohne Internet aus dem Speicher.
 // CACHE muss zur Versionsnummer in version.js passen (tools/test-version.mjs prüft das).
-const CACHE = "lernnest-v4";
-const FILES = ["./", "index.html", "style.css", "version.js", "logic.js", "inhalte-bio.js", "inhalte-englisch.js", "begleiter.js", "app.js", "manifest.webmanifest", "icons/icon-180.png", "icons/icon-192.png", "icons/icon-512.png"];
+const CACHE = "lernnest-v5";
+const FILES = ["./", "index.html", "style.css", "version.js", "logic.js", "inhalte-bio.js", "inhalte-englisch.js", "begleiter.js", "spiele.js", "app.js", "fonts/sora.woff2", "manifest.webmanifest", "icons/icon-180.png", "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));

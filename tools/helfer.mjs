@@ -101,7 +101,13 @@ export async function spieleEtappe(page, { fehlerBei = [] } = {}) {
     if (fehlerBei.includes(n) && status === "offen") { await falsch(page); n++; continue; }
     await loese(page); n++;
   }
+  await levelUpZu(page);
   return n;
+}
+
+// Level-Up-Fenster schließen, falls es offen ist
+export async function levelUpZu(page) {
+  if (await page.locator("[data-act=levelup-zu]").count()) await page.click("[data-act=levelup-zu]");
 }
 
 export async function langDruecken(page, sel, ms) {

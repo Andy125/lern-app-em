@@ -46,7 +46,16 @@
     try { const o = JSON.parse(t); if (o && o.erstellt) { S = L.migrate(o); speichern(); ui = startUi(); render(); toast("Dein Spielstand ist wieder da."); } } catch (e) { /* egal */ }
   });
   window.addEventListener("pagehide", () => { if (TEST.einfrieren) return; zeitBuchen(); try { const t = JSON.stringify(S); localStorage.setItem(KEY, t); localStorage.setItem(BAK, t); idbSchreiben(t); } catch (e) { /* egal */ } });
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") { zeitBuchen(); speichern(); } });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") { zeitBuchen(); speichern(); if (spielCtrl) spielCtrl.pause(true); }
+    else if (spielCtrl && spielCtrl.pausiert) zeigePause();
+  });
+  function zeigePause() {
+    const box = app.querySelector(".spiel"); if (!box || box.querySelector(".spiel-ende")) return;
+    const el = document.createElement("div"); el.className = "spiel-ende";
+    el.innerHTML = `<div class="dialog"><h2>Pause</h2><div class="knopfzeile" style="justify-content:center"><button class="btn haupt" data-act="spiel-weiter">Weiter</button></div></div>`;
+    box.appendChild(el);
+  }
 
   function sicherungSpeichern() {
     const daten = JSON.stringify({ app: "lernnest", version: VER.n, gespeichert: new Date().toISOString(), stand: S });
@@ -93,8 +102,8 @@
   const fachById = (id) => FAECHER.find((f) => f.id === id) || null;
   // Fach der laufenden Runde (die gemeinsame Mission mischt Fächer), sonst das gewählte Fach
   const rf = () => (ui && ui.runde && fachById(ui.runde.fachId)) || fach();
-  const tag = () => { const d = heute(); return S.tage[d] || (S.tage[d] = { sek: 0, aufgaben: 0, richtig: 0, etappen: 0, mission: false }); };
-  const tagLesen = () => S.tage[heute()] || { sek: 0, aufgaben: 0, richtig: 0, etappen: 0, mission: false };
+  const tag = () => { const d = heute(); return S.tage[d] || (S.tage[d] = { sek: 0, aufgaben: 0, richtig: 0, etappen: 0, mission: false, spiele: 0 }); };
+  const tagLesen = () => S.tage[heute()] || { sek: 0, aufgaben: 0, richtig: 0, etappen: 0, mission: false, spiele: 0 };
 
   function toast(text) {
     document.querySelectorAll(".toast").forEach((x) => x.remove()); // nie mehrere übereinander
@@ -145,10 +154,10 @@
   let letzteAktion = 0;
   function zeitBuchen() { const t = Date.now(); if (letzteAktion) tag().sek += Math.min(90, (t - letzteAktion) / 1000); letzteAktion = ui && ui.ansicht === "runde" ? t : 0; }
 
-  const LOB = ["Super!", "Genau!", "Richtig!", "Stark!", "Klasse!", "Volltreffer!", "Das sitzt!", "Prima!", "Toll gemacht!"];
-  const LOB_SPAETER = ["Jetzt hast du es!", "Gut, dass du drangeblieben bist!", "Geschafft, prima!", "Siehst du, du kannst das!"];
-  const FAST = ["Fast! Schau noch einmal.", "Noch nicht ganz. Du schaffst das!", "Knapp daneben. Probier es noch einmal.", "Fast! Lies den Tipp und versuch es noch mal."];
-  const LOESUNG = ["Das ist knifflig. So geht es:", "Kein Problem, so ist es richtig:", "Das üben wir gleich noch einmal. So ist es richtig:"];
+  const LOB = ["Richtig.", "Stark.", "Läuft.", "Sauber.", "Genau.", "Nice.", "Treffer.", "Top."];
+  const LOB_SPAETER = ["Jetzt passt es.", "Gut korrigiert.", "Geschafft."];
+  const FAST = ["Fast. Schau noch mal genau hin.", "Knapp daneben.", "Noch nicht ganz. Der Tipp hilft."];
+  const LOESUNG = ["So ist es richtig:", "Das war knifflig. So geht es:"];
   const BEWEGUNG = [
     "Steh auf und streck dich ganz hoch, als wolltest du die Decke berühren.",
     "Hüpfe 10-mal auf der Stelle.",
@@ -160,7 +169,11 @@
     "Lauf einmal durch das Zimmer und wieder zurück.",
     "Mach dich ganz klein wie eine Maus und dann ganz groß wie ein Riese. Dreimal!",
   ];
-  const GRUSS = ["Schön, dass du da bist, {name}!", "Hallo {name}! Ich hab schon auf dich gewartet.", "{name}, heute schaffen wir das zusammen!", "Juhu, {name} ist da!"];
+  const GRUSS = ["Hey {name}", "Hi {name}", "Hey {name}, bereit?"];
+  const TOKEN = `<svg class="token" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.8 21 7v10l-9 5.2L3 17V7z" fill="#5FDDBE" stroke="#2fa88a" stroke-width="1.4"/><path d="M12 6.2 16.8 9v6L12 17.8 7.2 15V9z" fill="#2fa88a"/><path d="M10.2 9.4 14.6 12l-4.4 2.6z" fill="#e9fff8"/></svg>`;
+  const level = () => L.level(S.punkte);
+  // Vorschau der Designs: Hintergrund, Schrift, Akzent (wie in style.css)
+  const THEME_FARBEN = { nacht: ["#1E1B36", "#F3F0FF", "#F2773A"], hell: ["#F3F1FA", "#1E1B36", "#E5662A"], ozean: ["#0F2A33", "#E8FBFF", "#FFB347"], sunset: ["#2A1630", "#FFF0F5", "#FF8A5B"], galaxy: ["#0E1030", "#EEF0FF", "#FF5FA2"] };
   const fuell = (s) => s.replace("{name}", esc(S.name || "du")).replace("{tier}", esc(tierName()));
 
   // ================= Plan =================
@@ -229,7 +242,7 @@
     const tabs = FAECHER.length > 1 && ui.ansicht === "start"
       ? `<nav class="faecher">${FAECHER.map((f) => `<button class="fach-tab${f === fach() ? " aktiv" : ""}" data-act="fach" data-arg="${esc(f.id)}">${esc(f.icon)} ${esc(f.kurz || f.name)}</button>`).join("")}</nav>`
       : `<h1 class="titel">${zurueck ? `<button class="zurueck" data-act="heim" aria-label="Zurück">‹</button>` : ""}${esc(titel || "Lernnest")}</h1>`;
-    return `<header class="kopf">${tabs}<div class="muenzen" aria-label="${S.muenzen} Münzen">${TIER.muenze()} <b>${S.muenzen}</b></div></header>`;
+    return `<header class="kopf">${tabs}<div class="chips"><span class="chip level" aria-label="Level ${level()}">Lv ${level()}</span><span class="chip tokens" aria-label="${S.tokens} Tokens">${TOKEN} <b>${S.tokens}</b></span><div class="muenzen" aria-label="${S.muenzen} Münzen">${TIER.muenze()} <b>${S.muenzen}</b></div></div></header>`;
   }
 
   // ================= Willkommen =================
@@ -241,14 +254,14 @@
       <button class="btn haupt" data-act="w-name">Weiter</button></main>`;
     if (ui.schritt === 2) return `<main class="mitte willkommen">
       <h1>Such dir ein Tier aus, ${esc(S.name)}!</h1>
-      <p class="leise">Es lebt in deiner App. Mit den Münzen vom Üben kannst du es füttern, anziehen und sein Zimmer einrichten.</p>
+      <p class="leise">Es begleitet dich durch die App und rennt in der Spielhalle. Mit Münzen kaufst du Futter, Outfits und Sachen fürs Zimmer.</p>
       <div class="tierwahl">${Object.keys(TIER.ARTEN).map((a) => `<button class="tierkarte${ui.art === a ? " aktiv" : ""}" data-act="w-tier" data-arg="${a}">${TIER.tierSvg(a, { stufe: 1 })}<span>${TIER.ARTEN[a].name}</span></button>`).join("")}</div>
       <button class="btn haupt" data-act="w-tier-ok" ${ui.art ? "" : "disabled"}>Weiter</button></main>`;
     return `<main class="mitte willkommen">
       <div class="gross-tier">${TIER.tierSvg(ui.art, { mood: "jubel" })}</div>
       <h1>Wie soll dein${ui.art === "katze" ? "e" : ""} ${TIER.ARTEN[ui.art].name} heißen?</h1>
       <input id="tiername" class="eingabe" maxlength="20" autocomplete="off" autocapitalize="words" placeholder="Name für dein Tier">
-      <button class="btn haupt" data-act="w-fertig">Los geht's!</button></main>`;
+      <button class="btn haupt" data-act="w-fertig">Fertig</button></main>`;
   }
 
   // ================= Startseite =================
@@ -272,34 +285,60 @@
     const missionText = !mehrere || !kurzPlan ? esc(planText(hf, hp))
       : (m.neben && etappen[0].fach !== hf.id ? `Zum Aufwärmen ${esc(fachKurz(etappen[0].fach))}, dann ` : "") + esc(fachKurz(hf.id) + ": " + kurzPlan());
     const punkte = etappen.map((e, i) => `<span class="etappe-punkt${fertig || i < t.etappen ? " fertig" : ""}" title="${esc(e.titel)}">${fertig || i < t.etappen ? "✓" : i + 1}</span>`).join("");
-    const knopf = fertig ? "Bonus-Runde" : t.etappen > 0 ? `Weiter mit Etappe ${t.etappen + 1}` : "Los geht's";
+    const knopf = fertig ? "Bonus-Runde" : t.etappen > 0 ? `Weiter mit Etappe ${t.etappen + 1}` : "Start";
+    const lv = level(), von = L.levelStart(lv), bis = L.levelStart(lv + 1);
+    const serie = streak();
     const tageWoche = Object.keys(S.tage).filter((d) => L.tageBis(d, heute()) < 7 && L.tageBis(d, heute()) >= 0 && S.tage[d].aufgaben > 0).length;
+    const fk = fakt(f, p.themen, L.tageBis("2026-01-01", heute()));
+    const spieleHeute = (tagLesen().spiele || 0), rest = Math.max(0, S.einst.spieleProTag - spieleHeute);
     return `${kopf()}<main class="start">
       ${f.beispiel ? `<p class="hinweis">Beispielinhalt zum Ausprobieren. Die echten Aufgaben kommen bald.</p>` : ""}
-      <section class="zimmer-box" data-act="tier" aria-label="Zu ${esc(tierName())}">
-        ${TIER.zimmerSvg(S.tier.art, { besitz: S.besitz, traegt: S.traegt, stufe: L.stufe(S.punkte), mood: fertig ? "jubel" : "froh" })}
-        <div class="sprechblase">${fertig ? `Mission geschafft! Ich bin so stolz auf dich, ${esc(S.name)}!` : (() => { const fk = fakt(f, p.themen, L.tageBis("2026-01-01", heute())); return fk ? `<b>Wusstest du?</b> ${esc(fk)}` : fuell(GRUSS[new Date().getDate() % GRUSS.length]); })()}</div>
+      <section class="profil-kopf">
+        <button class="avatar" data-act="tier" aria-label="Zu ${esc(tierName())}">${TIER.tierSvg(S.tier.art, { stufe: L.stufe(S.punkte), traegt: S.traegt })}</button>
+        <div class="profil-text">
+          <h1 class="hallo">${fuell(GRUSS[L.tageBis("2026-01-01", heute()) % GRUSS.length])}</h1>
+          <div class="level-zeile"><b>Level ${lv}</b><span>${esc(L.rang(lv))}</span><span>${S.punkte - von} von ${bis - von} XP</span></div>
+          <div class="xp-balken" aria-hidden="true"><i style="width:${Math.round((100 * (S.punkte - von)) / (bis - von))}%"></i></div>
+        </div>
+        ${serie > 1 ? `<div class="streak" aria-label="${serie} Tage in Folge geübt">🔥 ${serie}</div>` : ""}
       </section>
-      <p class="hallo">${fuell(GRUSS[L.tageBis("2026-01-01", heute()) % GRUSS.length])}</p>
       ${countdown ? `<p class="countdown">${countdown}</p>` : ""}
-      <section class="mission karte">
-        <div><h2>${fertig ? "Tagesmission geschafft! 🎉" : "Tagesmission"}</h2>
-        <p>${missionText}</p>
+      <section class="mission">
+        <div><h2>${fertig ? "Mission geschafft" : "Mission"}</h2>
+        <p>${fertig ? `Für heute erledigt. Bonus-Runde für mehr XP: ${missionText}` : missionText}</p>
         <div class="etappen-punkte" aria-label="Etappen">${punkte}</div></div>
-        <button class="btn haupt gross" data-act="mission">${knopf}</button>
+        <button class="btn gross mission-knopf" data-act="mission">${knopf}</button>
+      </section>
+      <section class="duo">
+        <article class="arcade">
+          <h2>Spielhalle</h2>
+          <div class="tokens-gross">${TOKEN} ${S.tokens}</div>
+          <p>${!S.einst.spieleProTag ? "Die Spielhalle ist gerade ausgeschaltet." : S.tokens ? (rest ? `Ein Token ist eine Runde. Heute gehen noch ${rest}.` : "Für heute ist die Spielhalle zu.") : `Tokens gibt es für Etappen mit ${L.tokenNoetig(S.einst.etappe)} von ${S.einst.etappe} auf Anhieb richtig.`}</p>
+          <div class="knopfzeile"><button class="btn" data-act="spielhalle">Zur Spielhalle</button></div>
+        </article>
+        <article class="hund-karte" data-act="tier" role="button" tabindex="0" aria-label="Zu ${esc(tierName())}">
+          <div class="hund-name"><span class="mini-avatar">${TIER.tierSvg(S.tier.art, { stufe: L.stufe(S.punkte), traegt: S.traegt })}</span>${esc(tierName())}</div>
+          <div class="sprechblase">${fk ? `<b>Fun Fact:</b> ${esc(fk)}` : "Tipp: Füttere mich mit deinen Münzen."}</div>
+        </article>
       </section>
       <section class="kacheln">
-        <button class="kachel" data-act="themen"><span>🎯</span>Frei üben</button>
-        <button class="kachel" data-act="kiste" ${kiste ? "" : "disabled"}><span>🧺</span>Fehlerkiste${kiste ? ` <b class="zahl-badge">${kiste}</b>` : ""}</button>
-        <button class="kachel" data-act="karten"><span>📖</span>Lernkarten</button>
-        <button class="kachel" data-act="probe-start"><span>📝</span>Probe-Arbeit</button>
-        ${(() => { const a = L.auftraege(f); const offen = a.filter((x) => !S.auftraege[x.id]).length; return a.length ? `<button class="kachel" data-act="auftraege"><span>🎨</span>Forschen &amp; Basteln${offen ? ` <b class="zahl-badge">${offen}</b>` : ""}</button>` : ""; })()}
-        <button class="kachel" data-act="tier"><span>🏠</span>${esc(tierName())}</button>
+        <button class="kachel" data-act="themen"><span>🎯</span>Üben</button>
+        <button class="kachel" data-act="kiste" ${kiste ? "" : "disabled"}><span>🧩</span>Fehler${kiste ? ` <b class="zahl-badge">${kiste}</b>` : ""}</button>
+        <button class="kachel" data-act="karten"><span>📖</span>Karten</button>
+        <button class="kachel" data-act="probe-start"><span>📝</span>Probe</button>
+        ${(() => { const a = L.auftraege(f); const offen = a.filter((x) => !S.auftraege[x.id]).length; return a.length ? `<button class="kachel" data-act="auftraege"><span>⚡</span>Challenges${offen ? ` <b class="zahl-badge">${offen}</b>` : ""}</button>` : ""; })()}
       </section>
       <footer class="fuss">
-        <span>${tageWoche ? `Diese Woche an ${tageWoche} ${tageWoche === 1 ? "Tag" : "Tagen"} geübt` : "Schön, dass du da bist!"}</span>
+        <span>${tageWoche ? `Diese Woche an ${tageWoche} ${tageWoche === 1 ? "Tag" : "Tagen"} geübt` : "Neue Woche, neue XP."}</span>
         <button id="eltern-knopf" class="eltern-knopf" type="button" aria-label="Für Eltern: gedrückt halten"><span class="fuell"></span><span class="text">Für Eltern: gedrückt halten</span></button>
       </footer></main>`;
+  }
+  // Tage in Folge mit Übung (heute zählt, wenn schon geübt; sonst ab gestern)
+  function streak() {
+    let n = 0, d = heute();
+    if (!(S.tage[d] && S.tage[d].aufgaben > 0)) d = L.plusTage(d, -1);
+    while (S.tage[d] && S.tage[d].aufgaben > 0) { n++; d = L.plusTage(d, -1); }
+    return n;
   }
 
   // ================= Runden =================
@@ -315,6 +354,7 @@
     const n = e.n || S.einst.etappe;
     R.specs = L.buildEtappe(f, S, { n, seed: zufall(), art: e.art, themen: e.themen });
     R.i = -1; R.richtig = 0; R.ersteRichtig = 0; R.serie = 0; R.nochmal = 0; R.muenzenStart = S.muenzen;
+    R.anzahl = R.specs.length; R.xpStart = S.punkte; R.levelStart = L.level(S.punkte); R.tokensStart = S.tokens;
     if (!R.specs.length) { toast("Hier gibt es gerade nichts zu üben."); gehe("start"); return false; }
     return true;
   }
@@ -350,16 +390,19 @@
     if (r.ok) {
       const erster = R.versuche === 0 && !R.tippOffen;
       if (R.versuche === 0) L.record(S, f.id, t.teil, erster, heute());
-      R.status = "richtig"; R.serie++; R.richtig++; if (erster) R.ersteRichtig++;
-      const m = R.versuche === 0 ? L.LOHN.richtig : L.LOHN.spaeter;
-      S.muenzen += m; S.punkte += R.versuche === 0 ? L.LOHN.punkteRichtig : L.LOHN.punkteSpaeter;
+      R.status = "richtig"; R.richtig++;
+      R.serie = erster ? R.serie + 1 : 0;
+      // Auf Anhieb zählt nur bei den Aufgaben der Etappe, nicht bei den wiederholten
+      if (erster && !(R.specs[R.i] && R.specs[R.i].nochmal)) R.ersteRichtig++;
+      let m = erster ? L.LOHN.richtig : L.LOHN.spaeter;
+      if (erster && R.serie > 0 && R.serie % L.LOHN.combo === 0) m += L.LOHN.comboBonus;
+      S.muenzen += m; S.punkte += erster ? L.LOHN.punkteRichtig : L.LOHN.punkteSpaeter;
       T.aufgaben++; T.richtig++;
       R.lob = R.versuche === 0 ? pick(LOB) : pick(LOB_SPAETER);
       R.exakt = r.exakt !== false;
       ton(R.serie);
-      speichern(); render(); plusAnzeigen("+" + m);
+      speichern(); render(); if (m) plusAnzeigen("+" + m);
       if (S.einst.vorlesen && t.englisch) sprich([[t.englisch, "en"]]);
-      if (R.serie > 0 && R.serie % 5 === 0) konfetti();
       return;
     }
     R.versuche++; R.serie = 0;
@@ -375,34 +418,52 @@
       R.status = "loesung"; R.text = pick(LOESUNG);
       T.aufgaben++;
       // Gleich noch einmal üben: am Ende der Etappe mit neuem Startwert (höchstens zweimal pro Etappe)
-      if (R.nochmal < 2) { R.nochmal++; R.specs.push({ teil: t.teil, modus: t.modus, seed: zufall() }); }
+      if (R.nochmal < 2) { R.nochmal++; R.specs.push({ teil: t.teil, modus: t.modus, seed: zufall(), nochmal: true }); }
     } else { R.status = "tipp"; R.text = pick(FAST); }
     speichern(); render();
   }
+  // Belohnung nach Leistung: Token nur mit 80 % auf Anhieb, Münzen ab der Hälfte, Mission gibt einen Token extra
   function etappeFertig() {
     const R = ui.runde;
-    S.muenzen += L.LOHN.etappe;
+    const anzahl = R.anzahl || R.specs.length;
+    const quote = anzahl ? R.ersteRichtig / anzahl : 0;
+    const b = { quote, ersteRichtig: R.ersteRichtig, anzahl, muenzen: 0, xp: 0, tokens: 0, noetig: L.tokenNoetig(anzahl) };
+    if (quote >= 0.5) { S.muenzen += L.LOHN.etappe; }
+    if (quote >= 0.8) { S.punkte += L.LOHN.punkteEtappe; }
+    if (R.ersteRichtig >= b.noetig && R.typ !== "kiste") { S.tokens += 1; b.tokens += 1; }
+    const missionFertig = R.mission && R.nr + 1 >= R.etappen.length;
     if (R.mission) {
       const T = tag(); T.etappen = Math.max(T.etappen, R.nr + 1);
-      if (R.nr + 1 >= R.etappen.length) { T.mission = true; S.muenzen += L.LOHN.mission; }
+      if (missionFertig) { T.mission = true; S.muenzen += L.LOHN.mission; S.punkte += L.LOHN.punkteMission; S.tokens += 1; b.tokens += 1; }
     }
+    b.muenzen = S.muenzen - R.muenzenStart; b.xp = S.punkte - R.xpStart;
+    R.belohnung = b;
     speichern();
-    const missionFertig = R.mission && R.nr + 1 >= R.etappen.length;
     ui.ansicht = missionFertig ? "mission-ende" : R.nr + 1 < R.etappen.length ? "etappe-ende" : "runde-ende";
     letzteAktion = 0;
-    render(); konfetti(); ton(12);
+    pruefeLevelUp(R.levelStart);
+    render(); if (missionFertig || ui.levelUp) konfetti(); ton(12);
+  }
+  function pruefeLevelUp(vorher) {
+    const jetzt = L.level(S.punkte);
+    if (jetzt > vorher) ui.levelUp = { n: jetzt, rang: L.rang(jetzt), neu: L.THEMES.filter((t) => t.ab > vorher && t.ab <= jetzt).map((t) => t.name) };
+  }
+  function belohnungHtml(b) {
+    if (!b) return "";
+    return `<div class="belohnung">${b.xp ? `<span>+${b.xp} XP</span>` : ""}${b.muenzen ? `<span>+${b.muenzen} ${TIER.muenze()}</span>` : ""}${b.tokens ? `<span class="neu">+${b.tokens} ${TOKEN}</span>` : ""}</div>`;
   }
 
   function rundeKopf() {
     const R = ui.runde;
     const e = R.etappen[R.nr];
-    const titel = (FAECHER.length > 1 ? rf().icon + " " : "") + (R.typ === "probe" ? "Probe-Arbeit" : R.etappen.length > 1 ? `Etappe ${R.nr + 1} von ${R.etappen.length} · ${e.titel}` : (R.titel || e.titel));
+    const titel = (FAECHER.length > 1 ? rf().icon + " " : "") + (R.typ === "probe" ? "Probe-Arbeit" : R.etappen.length > 1 ? `Etappe ${R.nr + 1} von ${R.etappen.length}: ${e.titel}` : (R.titel || e.titel));
     const dots = R.specs.map((_, i) => `<i class="${i < R.i ? "fertig" : i === R.i ? "jetzt" : ""}"></i>`).join("");
     const mood = R.status === "richtig" ? "jubel" : "froh";
     return `<header class="kopf runde-kopf">
       <button class="zurueck" data-act="pause-runde" aria-label="Pause, zurück zur Startseite">✕</button>
       <div class="runde-info"><div class="runde-titel">${esc(titel)}</div><div class="fortschritt" aria-label="Aufgabe ${R.i + 1} von ${R.specs.length}">${dots}</div></div>
-      <div class="mini-tier ${R.status === "richtig" && !S.einst.ruhig ? (R.serie >= 5 && R.serie % 5 === 0 ? "salto" : "huepf") : ""}">${TIER.tierSvg(S.tier.art, { mood, stufe: L.stufe(S.punkte), traegt: S.traegt })}</div>
+      ${R.serie >= 3 ? `<span class="combo" aria-label="${R.serie} richtig in Folge">Combo ${R.serie}</span>` : ""}
+      <div class="mini-tier ${R.status === "richtig" && !S.einst.ruhig ? "huepf" : ""}">${TIER.tierSvg(S.tier.art, { mood, stufe: L.stufe(S.punkte), traegt: S.traegt })}</div>
       <div class="muenzen">${TIER.muenze()} <b>${S.muenzen}</b></div></header>`;
   }
 
@@ -553,32 +614,33 @@
 
   function etappeStart() {
     const R = ui.runde, e = R.etappen[R.nr];
-    const titel = R.etappen.length > 1 ? `Etappe ${R.nr + 1} von ${R.etappen.length}` : (R.titel || "Los geht's");
+    const titel = R.etappen.length > 1 ? `Etappe ${R.nr + 1} von ${R.etappen.length}` : (R.titel || "Runde");
     return `${kopf("", true)}<main class="mitte">
-      <div class="gross-tier">${TIER.tierSvg(S.tier.art, { mood: "jubel", stufe: L.stufe(S.punkte), traegt: S.traegt })}</div>
-      ${(() => { const ef = fachById(e.fach) || fach(); return `<h1>${esc(titel)}</h1><p class="untertitel">${FAECHER.length > 1 ? esc(ef.icon + " " + (ef.kurz || ef.name)) + " · " : ""}${esc(e.titel)}${e.themen ? ": " + esc(e.themen.map((id) => themaName(ef, id)).join(", ")) : ""}</p>
-      ${e.themen && e.themen.length === 1 && e.art === "neu" ? warumBox(ef.themen.find((t) => t.id === e.themen[0])) : (() => { const fk = fakt(ef, e.themen, R.nr + L.tageBis("2026-01-01", heute())); return fk ? `<p class="fakt"><b>Wusstest du?</b> ${esc(fk)}</p>` : ""; })()}`; })()}
-      <p class="leise">${e.n || S.einst.etappe} Aufgaben. ${R.nr === 0 && R.mission ? "Danach eine kurze Bewegungspause." : ""}</p>
-      <button class="btn haupt gross" data-act="etappe-los">Los geht's!</button></main>`;
+      ${(() => { const ef = fachById(e.fach) || fach(); return `<h1>${esc(titel)}</h1><p class="untertitel">${FAECHER.length > 1 ? esc(ef.icon + " " + (ef.kurz || ef.name)) + ": " : ""}${esc(e.titel)}${e.themen ? ": " + esc(e.themen.map((id) => themaName(ef, id)).join(", ")) : ""}</p>
+      ${e.themen && e.themen.length === 1 && e.art === "neu" ? warumBox(ef.themen.find((t) => t.id === e.themen[0])) : (() => { const fk = fakt(ef, e.themen, R.nr + L.tageBis("2026-01-01", heute())); return fk ? `<p class="fakt"><b>Fun Fact:</b> ${esc(fk)}</p>` : ""; })()}`; })()}
+      <p class="leise">${e.n || S.einst.etappe} Aufgaben. ${e.art !== "kiste" ? `Mit ${L.tokenNoetig(e.n || S.einst.etappe)} auf Anhieb richtig gibt es einen Token.` : ""}</p>
+      <button class="btn haupt gross" data-act="etappe-los">Start</button></main>`;
   }
   function etappeEnde() {
     const R = ui.runde;
-    const sterne = R.ersteRichtig >= R.specs.length * 0.8 ? 3 : R.ersteRichtig >= R.specs.length * 0.5 ? 2 : 1;
+    const b = R.belohnung || {};
+    const sterne = b.quote >= 0.8 ? 3 : b.quote >= 0.5 ? 2 : 1;
     return `${kopf()}<main class="mitte">
-      <div class="gross-tier huepf">${TIER.tierSvg(S.tier.art, { mood: "jubel", stufe: L.stufe(S.punkte), traegt: S.traegt })}</div>
-      <h1>Etappe geschafft!</h1>
+      <h1>Etappe geschafft</h1>
       <div class="sterne" aria-label="${sterne} Sterne">${"★".repeat(sterne)}<span>${"★".repeat(3 - sterne)}</span></div>
-      <p>+${S.muenzen - R.muenzenStart} Münzen für ${esc(tierName())}.</p>
-      ${S.einst.pause ? `<button class="btn haupt gross" data-act="bewegung">Weiter zur Bewegungspause</button>` : `<button class="btn haupt gross" data-act="naechste-etappe">Nächste Etappe</button>`}
+      <p>${b.ersteRichtig} von ${b.anzahl} auf Anhieb richtig.</p>
+      ${belohnungHtml(b)}
+      ${b.tokens ? "" : `<p class="regel">Für einen Token brauchst du ${b.noetig} von ${b.anzahl} auf Anhieb. In der nächsten Etappe klappt's.</p>`}
+      ${S.einst.pause ? `<button class="btn haupt gross" data-act="bewegung">Weiter zur Pause</button>` : `<button class="btn haupt gross" data-act="naechste-etappe">Nächste Etappe</button>`}
       <button class="btn leise-btn" data-act="heim">Für heute aufhören</button></main>`;
   }
   let pauseTimer = null;
   function bewegung() {
     const sek = TEST.pauseMs != null ? TEST.pauseMs / 1000 : S.einst.pauseSek;
-    return `${kopf("Bewegungspause")}<main class="mitte pause">
+    return `${kopf("Pause")}<main class="mitte pause">
       <div class="pause-uhr" style="--dauer:${sek}s"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="44"/><circle class="lauf" cx="50" cy="50" r="44"/></svg><span id="pause-rest">${Math.ceil(sek)}</span></div>
-      <h1>Kurz bewegen!</h1><p class="bewegung">${esc(ui.bewegung)}</p>
-      <button id="pause-weiter" class="btn haupt gross" data-act="naechste-etappe" disabled>Fertig, weiter!</button></main>`;
+      <h1>Kurz bewegen</h1><p class="bewegung">${esc(ui.bewegung)}</p>
+      <button id="pause-weiter" class="btn haupt gross" data-act="naechste-etappe" disabled>Weiter</button></main>`;
   }
   function starteBewegung() {
     ui.ansicht = "bewegung"; ui.bewegung = pick(BEWEGUNG); render();
@@ -592,12 +654,14 @@
     }, 200);
   }
   function rundeEnde(mission) {
-    const T = tagLesen();
+    const T = tagLesen(), R = ui.runde || {}, b = R.belohnung;
     return `${kopf()}<main class="mitte">
-      <div class="gross-tier huepf">${TIER.tierSvg(S.tier.art, { mood: "jubel", stufe: L.stufe(S.punkte), traegt: S.traegt })}</div>
-      <h1>${mission ? "Tagesmission geschafft! 🎉" : "Runde geschafft!"}</h1>
-      ${mission ? `<p class="schatz">🎁 Schatztruhe: +${L.LOHN.mission} Münzen extra</p><p>Heute hast du ${T.richtig} Aufgaben richtig gelöst. ${esc(tierName())} freut sich riesig!</p>` : `<p>Gut gemacht, ${esc(S.name)}!</p>`}
-      <button class="btn haupt gross" data-act="tier">Zu ${esc(tierName())}</button>
+      <h1>${mission ? "Mission geschafft" : "Runde geschafft"}</h1>
+      ${b ? `<p>${b.ersteRichtig} von ${b.anzahl} auf Anhieb richtig.</p>` : ""}
+      ${belohnungHtml(b)}
+      ${mission ? `<p class="leise">Heute ${T.richtig} Aufgaben richtig. Die Mission bringt einen Token extra.</p>` : ""}
+      ${S.tokens ? `<button class="btn haupt gross" data-act="spielhalle">Zur Spielhalle</button>` : ""}
+      <button class="btn${S.tokens ? "" : " haupt gross"}" data-act="tier">Zu ${esc(tierName())}</button>
       <button class="btn leise-btn" data-act="heim">Zur Startseite</button></main>`;
   }
 
@@ -706,16 +770,20 @@
     const prozent = ges.length ? Math.round((100 * ges.filter((e) => e.ok).length) / ges.length) : 0;
     const themenP = {}; for (const th of Object.keys(zaehl)) themenP[th] = Math.round((100 * zaehl[th].ok) / zaehl[th].n);
     (S.proben[f.id] = S.proben[f.id] || []).push({ datum: heute(), prozent, themen: themenP });
-    S.muenzen += L.LOHN.probe; tag().aufgaben += ges.length; tag().richtig += ges.filter((e) => e.ok).length;
+    const lvVorher = L.level(S.punkte);
+    const token = prozent >= 80 ? 1 : 0;
+    S.muenzen += L.LOHN.probe; S.tokens += token; S.punkte += Math.round(prozent / 5);
+    tag().aufgaben += ges.length; tag().richtig += ges.filter((e) => e.ok).length;
     speichern();
-    ui = { ansicht: "probe-ende", prozent, themenP, falsch: ges.filter((e) => !e.ok).length };
-    render(); konfetti();
+    ui = { ansicht: "probe-ende", prozent, themenP, falsch: ges.filter((e) => !e.ok).length, belohnung: { muenzen: L.LOHN.probe, tokens: token, xp: Math.round(prozent / 5) } };
+    pruefeLevelUp(lvVorher);
+    render(); if (prozent >= 80 || ui.levelUp) konfetti();
   }
   function probe() {
     const P = ui.runde, t = P.task;
     const dots = P.specs.map((_, i) => `<i class="${i < P.i ? "fertig" : i === P.i ? "jetzt" : ""}"></i>`).join("");
     return `<header class="kopf runde-kopf"><button class="zurueck" data-act="heim" aria-label="Probe abbrechen">✕</button>
-      <div class="runde-info"><div class="runde-titel">Probe-Arbeit · Aufgabe ${Math.min(P.i + 1, P.specs.length)} von ${P.specs.length}</div><div class="fortschritt">${dots}</div></div>
+      <div class="runde-info"><div class="runde-titel">Probe-Arbeit: Aufgabe ${Math.min(P.i + 1, P.specs.length)} von ${P.specs.length}</div><div class="fortschritt">${dots}</div></div>
       <div class="mini-tier">${TIER.tierSvg(S.tier.art, { stufe: L.stufe(S.punkte), traegt: S.traegt })}</div></header>
       <main class="aufgabe art-${t.art}">${aufgabeHtml(t, P, true)}${t.art === "wahl" || t.art === "wahr" ? pruefKnopf(true, P.antwort !== "") : ""}</main>`;
   }
@@ -726,7 +794,8 @@
       <div class="gross-tier">${TIER.tierSvg(S.tier.art, { mood: "jubel", stufe: L.stufe(S.punkte), traegt: S.traegt })}</div>
       <h1>Probe geschafft!</h1><p>${text}</p>
       <div class="ergebnis-liste">${f.themen.filter((th) => ui.themenP[th.id] != null).map((th) => `<div class="ergebnis"><span>${esc(th.icon || "")} ${esc(th.name)}</span><span class="balken"><i style="width:${ui.themenP[th.id]}%"></i></span><b>${ui.themenP[th.id]} %</b></div>`).join("")}</div>
-      <p class="schatz">+${L.LOHN.probe} Münzen fürs Durchhalten</p>
+      ${belohnungHtml(ui.belohnung)}
+      ${ui.belohnung && !ui.belohnung.tokens ? `<p class="regel">Ab 80 % gibt es einen Token.</p>` : ""}
       ${ui.falsch ? `<button class="btn haupt" data-act="kiste">Fehler üben (${(S.fehler[f.id] || []).length})</button>` : ""}
       <button class="btn leise-btn" data-act="heim">Zur Startseite</button></main>`;
   }
@@ -735,7 +804,7 @@
   function tierSeite() {
     const reiter = ui.reiter || "futter";
     const angebot = L.laden(S.tier.art);
-    let liste = reiter === "futter" ? angebot.snacks : reiter === "zubehoer" ? angebot.zubehoer : angebot.zimmer;
+    let liste = reiter === "futter" ? angebot.snacks : reiter === "zubehoer" ? angebot.zubehoer : reiter === "zimmer" ? angebot.zimmer : [];
     // schon gekaufte Dinge aus früheren Versionen bleiben sichtbar
     if (reiter === "zimmer") liste = liste.concat(S.besitz.map(L.shopDing).filter((d) => d && !liste.some((x) => x.id === d.id) && !L.SHOP.zubehoer.some((x) => x.id === d.id)));
     const st = L.stufe(S.punkte), naechste = L.STUFEN[st + 1];
@@ -745,12 +814,14 @@
         ${ui.sagt ? `<div class="sprechblase">${esc(ui.sagt)}</div>` : ""}
         ${ui.mood === "jubel" ? `<div class="herzen" aria-hidden="true"><i>❤</i><i>❤</i><i>❤</i></div>` : ""}
       </section>
-      <p class="leise mitte-text">${esc(tierName())} ist ${L.STUFEN[st].name === "Baby" ? (S.tier.art === "hund" ? "noch ein Welpe" : "noch ein Baby") : L.STUFEN[st].name === "Held" ? "ein echter Held" : L.STUFEN[st].name.toLowerCase()}. ${naechste ? `Noch ${naechste.ab - S.punkte} Punkte, dann wächst ${esc(tierName())}.` : ""}</p>
+      <p class="leise mitte-text">${naechste ? `Noch ${naechste.ab - S.punkte} XP, dann wächst ${esc(tierName())}.` : `${esc(tierName())} ist ausgewachsen.`}</p>
       <nav class="reiter">
-        <button class="${reiter === "futter" ? "aktiv" : ""}" data-act="tier-reiter" data-arg="futter">${S.tier.art === "hund" ? "🦴" : "🍎"} Füttern</button>
-        <button class="${reiter === "zubehoer" ? "aktiv" : ""}" data-act="tier-reiter" data-arg="zubehoer">🎀 Anziehen</button>
-        <button class="${reiter === "zimmer" ? "aktiv" : ""}" data-act="tier-reiter" data-arg="zimmer">🛋️ Zimmer</button>
+        <button class="${reiter === "futter" ? "aktiv" : ""}" data-act="tier-reiter" data-arg="futter">Futter</button>
+        <button class="${reiter === "zubehoer" ? "aktiv" : ""}" data-act="tier-reiter" data-arg="zubehoer">Outfit</button>
+        <button class="${reiter === "zimmer" ? "aktiv" : ""}" data-act="tier-reiter" data-arg="zimmer">Zimmer</button>
+        <button class="${reiter === "design" ? "aktiv" : ""}" data-act="tier-reiter" data-arg="design">App-Design</button>
       </nav>
+      ${reiter === "design" ? `<p class="leise">Neue Designs schaltest du mit Level frei.</p><div class="themen-wahl">${L.THEMES.map((t) => { const frei = level() >= t.ab; return `<button class="theme-knopf${S.theme === t.id ? " aktiv" : ""}" style="background:${THEME_FARBEN[t.id][0]};color:${THEME_FARBEN[t.id][1]}" data-act="theme" data-arg="${t.id}" ${frei ? "" : "disabled"}>${esc(t.name)}<i style="background:${THEME_FARBEN[t.id][2]}"></i><small>${S.theme === t.id ? "aktiv" : frei ? "wählen" : "ab Level " + t.ab}</small></button>`; }).join("")}</div>` : ""}
       <div class="laden">${liste.map((d) => {
         const hat = S.besitz.includes(d.id), an = S.traegt.includes(d.id);
         const preis = `<span class="preis">${d.preis} ${TIER.muenze()}</span>`;
@@ -762,6 +833,65 @@
   function tierReagiert(mood, sagt, ms) {
     ui.mood = mood; ui.sagt = sagt; render();
     clearTimeout(moodTimer); moodTimer = setTimeout(() => { if (ui.ansicht === "tier") { ui.mood = null; ui.sagt = null; render(); } }, ms || 2200);
+  }
+
+  // ================= Spielhalle =================
+  const SPIELE = { run: { name: () => `${tierName()} Run`, text: "Springen, Doppelsprung, Knochen sammeln. Wie weit kommst du?" }, bloecke: { name: () => "Blöcke", text: "Blöcke drehen und stapeln. Volle Reihen verschwinden." } };
+  function spielhalle() {
+    const rest = Math.max(0, S.einst.spieleProTag - (tagLesen().spiele || 0));
+    const sperre = !S.einst.spieleProTag ? "Die Spielhalle ist gerade ausgeschaltet." : !S.tokens ? `Keine Tokens. Hol dir welche in der Mission: ${L.tokenNoetig(S.einst.etappe)} von ${S.einst.etappe} auf Anhieb richtig.` : !rest ? "Für heute ist die Spielhalle zu. Morgen geht es weiter." : "";
+    return `${kopf("Spielhalle", true)}<main class="liste spielhalle">
+      <div class="tokens-gross">${TOKEN} ${S.tokens}</div>
+      <p class="leise">Eine Runde kostet einen Token. ${S.einst.spieleProTag ? `Heute noch ${rest} ${rest === 1 ? "Runde" : "Runden"}.` : ""}</p>
+      ${sperre ? `<p class="hinweis">${sperre}</p>` : ""}
+      ${Object.keys(SPIELE).map((art) => `<article class="spiel-karte"><div><h2>${esc(SPIELE[art].name())}</h2><p>${SPIELE[art].text}</p><p>Rekord: <b>${S.spiele[art].best}</b></p></div><button class="btn haupt gross" data-act="spiel-start" data-arg="${art}" ${sperre ? "disabled" : ""}>Spielen</button></article>`).join("")}
+      <p class="regel">Tokens gibt es für jede Etappe mit ${L.tokenNoetig(S.einst.etappe)} von ${S.einst.etappe} auf Anhieb richtig, für jede geschaffte Mission und für Probe-Arbeiten ab 80 %.</p>
+    </main>`;
+  }
+  let spielCtrl = null;
+  function spielSeite() {
+    const art = ui.spielArt;
+    const kopfzeile = `<header class="kopf runde-kopf"><button class="zurueck" data-act="spiel-abbrechen" aria-label="Spiel beenden">✕</button><div class="runde-info"><div class="runde-titel">${esc(SPIELE[art].name())}</div></div><div class="hud"><span>Punkte <b id="hud-punkte">0</b></span><span>Rekord <b>${S.spiele[art].best}</b></span></div></header>`;
+    if (art === "bloecke") return `${kopfzeile}<main class="spiel spiel-bloecke"><div class="bloecke-layout"><div class="spiel-feld-platz"><canvas class="spielfeld" aria-label="Spielfeld"></canvas></div>
+      <aside class="bloecke-info"><div>Als Nächstes<canvas class="vorschau"></canvas></div><div>Reihen<b id="hud-linien">0</b></div><div>Level<b id="hud-level">1</b></div><div>Zeit<b id="hud-zeit">4:00</b></div></aside></div>
+      <div class="steuerung"><button data-spiel="links" aria-label="Nach links">◀</button><button data-spiel="drehen" aria-label="Drehen">⟳</button><button data-spiel="rechts" aria-label="Nach rechts">▶</button><button data-spiel="runter" aria-label="Schneller">▼</button><button data-spiel="fallen" aria-label="Ganz fallen lassen">⤓</button></div></main>`;
+    return `${kopfzeile}<main class="spiel spiel-run"><div class="run-platz"><canvas class="spielfeld" aria-label="Spielfeld"></canvas></div>
+      <p class="leise">Tippen: springen. Länger drücken: höher. In der Luft noch mal tippen: Doppelsprung.</p></main>`;
+  }
+  function spielStarten(art) {
+    const r = L.spielStart(S, art, heute());
+    if (!r.ok) { toast(r.grund === "tokens" ? "Keine Tokens mehr. Die gibt es in der Mission." : "Für heute ist die Spielhalle zu."); gehe("spielhalle"); return; }
+    speichern();
+    gehe("spiel", { spielArt: art, spielNeu: true });
+  }
+  function spielStartenNachRender() {
+    const box = app.querySelector(".spiel"); if (!box || spielCtrl) return;
+    ui.spielNeu = false;
+    const art = ui.spielArt, A = TIER.ARTEN[S.tier.art] || {};
+    spielCtrl = window.LN_SPIELE.starte(box, {
+      art, seed: zufall(), manuell: !!TEST.spielManuell,
+      tier: { fell: A.farbe, dunkel: A.dunkel, hell: A.hell || A.bauch, halsband: S.traegt.includes("halsband") },
+      onPunkte: (z) => {
+        const set = (id, v) => { const el = document.getElementById(id); if (el && el.textContent !== String(v)) el.textContent = v; };
+        set("hud-punkte", z.punkte);
+        if (art === "bloecke") { set("hud-linien", z.linien); set("hud-level", z.level); const rest = Math.max(0, window.LN_SPIELE.BLOECKE.ZEITLIMIT - z.zeit) / 1000; set("hud-zeit", Math.floor(rest / 60) + ":" + String(Math.floor(rest % 60)).padStart(2, "0")); }
+      },
+      onEnde: (erg) => spielVorbei(art, erg),
+    });
+  }
+  function spielVorbei(art, erg) {
+    const r = L.spielEnde(S, art, erg.punkte);
+    speichern();
+    const box = app.querySelector(".spiel"); if (!box) return;
+    const rest = Math.max(0, S.einst.spieleProTag - (tagLesen().spiele || 0));
+    const geht = S.tokens > 0 && rest > 0;
+    const grund = ui.spielAbbruch ? "Spiel beendet." : art === "bloecke" ? (erg.zeitUm ? "Zeit um." : "Kein Platz mehr.") : erg.grund === "grube" ? "In die Grube gefallen." : "Zusammengestoßen.";
+    const el = document.createElement("div"); el.className = "spiel-ende";
+    el.innerHTML = `<div class="dialog" role="dialog" aria-label="Ergebnis"><p class="leise">${grund}</p><div class="zahl">${erg.punkte}</div><p>${r.rekord ? "Neuer Rekord!" : `Rekord: ${S.spiele[art].best}`}</p>${art === "run" ? `<p class="leise">${erg.knochen} Knochen gesammelt</p>` : `<p class="leise">${erg.linien} Reihen</p>`}
+      <div class="knopfzeile" style="justify-content:center">${geht ? `<button class="btn haupt" data-act="spiel-start" data-arg="${art}">Noch mal (1 Token)</button>` : ""}<button class="btn" data-act="spielhalle">Spielhalle</button></div></div>`;
+    box.appendChild(el);
+    spielCtrl = null;
+    const hk = app.querySelector(".chips .tokens b"); if (hk) hk.textContent = S.tokens;
   }
 
   // ================= Eltern-Übersicht =================
@@ -807,6 +937,7 @@
         ${schalter("e-pause", e.pause, "Bewegungspause zwischen den Etappen")}
         <label>Dauer der Pause ${sel("e-pauseSek", [20, 30, 45, 60], e.pauseSek, (w) => w + " Sekunden")}</label>
         <label>Aufgaben in der Probe-Arbeit ${sel("e-probe", [8, 12, 16, 20], e.probeAnzahl)}</label>
+        <label>Spielrunden pro Tag in der Spielhalle ${sel("e-spiele", [0, 2, 3, 5, 8, 12], e.spieleProTag, (w) => (w ? w + " Runden" : "Spielhalle aus"))}</label>
         <h2>Darstellung</h2>
         ${schalter("e-toene", e.toene, "Töne")}
         ${schalter("e-ruhig", e.ruhig, "Ruhiger Modus (kein Konfetti, keine hüpfenden Tiere)")}
@@ -845,7 +976,7 @@
     let el = document.getElementById("version");
     if (!el) { el = document.createElement("button"); el.id = "version"; el.type = "button"; document.body.insertBefore(el, app); el.onclick = () => { ui.sicherFrage = true; render(); }; }
     const alter = S.lastBackup ? (Date.now() - S.lastBackup) / 864e5 : null;
-    el.textContent = `Version ${VER.n}` + (alter == null ? " · noch keine Sicherung" : alter > 7 ? ` · Sicherung vor ${Math.floor(alter)} Tagen` : " · gesichert ✓");
+    el.textContent = `Version ${VER.n}` + (alter == null ? ", noch keine Sicherung" : alter > 7 ? `, Sicherung vor ${Math.floor(alter)} Tagen` : ", gesichert ✓");
     el.className = alter == null || alter > 7 ? "alt" : "";
     el.setAttribute("aria-label", el.textContent + ". Antippen: Sicherung speichern");
   }
@@ -853,6 +984,7 @@
   // ================= Zeichnen =================
   function render() {
     if (ui.ansicht !== "bewegung") clearInterval(pauseTimer);
+    if (spielCtrl) { spielCtrl.stopp(); spielCtrl = null; }
     if (!FAECHER.length) { app.innerHTML = `<main class="mitte"><h1>Keine Inhalte gefunden.</h1></main>`; return; }
     if (!S.erstellt && ui.ansicht !== "willkommen") ui = startUi();
     let h = "";
@@ -871,14 +1003,20 @@
       case "probe": h = probe(); break;
       case "probe-ende": h = probeEnde(); break;
       case "auftraege": h = auftraegeSeite(); break;
+      case "spielhalle": h = spielhalle(); break;
+      // Ein Spiel startet nur nach dem Bezahlen mit einem Token, nie durch erneutes Zeichnen
+      case "spiel": if (ui.spielNeu) h = spielSeite(); else { ui = { ansicht: "spielhalle" }; h = spielhalle(); } break;
       case "tier": h = tierSeite(); break;
       case "eltern": h = eltern(); break;
       default: h = start();
     }
+    if (ui.levelUp) h += `<div class="dialog-hinter"><div class="dialog levelup" role="dialog" aria-label="Level-Up"><p class="leise">Level-Up</p><div class="zahl">Level ${ui.levelUp.n}</div><p>Rang: <b>${esc(ui.levelUp.rang)}</b></p>${ui.levelUp.neu.length ? `<p>Neu freigeschaltet: ${esc(ui.levelUp.neu.join(", "))} (App-Design)</p>` : ""}<div class="knopfzeile" style="justify-content:center"><button class="btn haupt" data-act="levelup-zu">Weiter</button></div></div></div>`;
     if (ui.tor) h += `<div class="dialog-hinter"><div class="dialog" role="dialog" aria-label="Für Eltern"><h2>Für Eltern</h2><p>Halte den Knopf etwa zwei Sekunden gedrückt, bis er ganz gefüllt ist. Oder rechne:</p><p class="tor-aufgabe"><b>${ui.tor.a} × ${ui.tor.b} =</b> <input id="tor-eingabe" class="eingabe klein" inputmode="numeric" autocomplete="off" aria-label="Ergebnis"></p><div class="knopfzeile"><button class="btn haupt" data-act="tor-ok">Öffnen</button><button class="btn" data-act="tor-zu">Abbrechen</button></div></div></div>`;
     if (ui.sicherFrage) h += `<div class="dialog-hinter"><div class="dialog" role="dialog" aria-label="Sicherung"><h2>Spielstand sichern?</h2><p>Die Sicherungsdatei kannst du in «Dateien» ablegen. Damit geht nichts verloren.</p><div class="knopfzeile"><button class="btn haupt" data-act="sicherung">Sicherung speichern</button><button class="btn" data-act="dialog-zu">Abbrechen</button></div></div></div>`;
     document.body.classList.toggle("ruhig", !!S.einst.ruhig);
+    document.documentElement.setAttribute("data-theme", S.theme || "nacht");
     app.innerHTML = mitHund(h, true);
+    if (ui.ansicht === "spiel") spielStartenNachRender();
     versionAnzeigen();
     const inp = document.getElementById("eingabe"); if (inp && !inp.disabled && !("ontouchstart" in window)) inp.focus();
     const sd = document.getElementById("sicherung-datei"); if (sd) sd.onchange = () => { if (sd.files && sd.files[0]) sicherungLaden(sd.files[0]); };
@@ -938,7 +1076,7 @@
         S.tier = { art: ui.art, name: (v || TIER.ARTEN[ui.art].name).slice(0, 20) };
         S.erstellt = Date.now(); S.muenzen += 10; speichern();
         try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { /* egal */ }
-        gehe("start"); toast("10 Münzen als Willkommensgeschenk!"); return;
+        gehe("start"); toast("10 Münzen zum Start."); return;
       }
       case "heim": clearInterval(pauseTimer); gehe("start"); return;
       case "fach": S.fach = arg; speichern(); gehe(ui.ansicht === "eltern" ? "eltern" : "start", ui.ansicht === "eltern" ? { reiter: "einst" } : null); return;
@@ -957,7 +1095,7 @@
       case "kiste": { const n = (S.fehler[fach().id] || []).length; if (!n) return; return starteRunde("kiste", [{ titel: "Fehlerkiste", art: "kiste", themen: null, n: Math.min(10, n), fach: fach().id }], "Fehlerkiste"); }
       case "karten": gehe("karten", { thema: null }); return;
       case "auftraege": gehe("auftraege"); return;
-      case "auftrag-fertig": if (L.auftragErledigt(S, arg, heute())) { speichern(); render(); konfetti(); ton(12); plusAnzeigen("+" + L.LOHN.auftrag); toast(`Super gemacht! +${L.LOHN.auftrag} Münzen für ${tierName()}.`); } return;
+      case "auftrag-fertig": { const lv = level(); if (L.auftragErledigt(S, arg, heute())) { speichern(); pruefeLevelUp(lv); render(); ton(12); plusAnzeigen("+" + L.LOHN.auftrag); toast(`Challenge geschafft: +${L.LOHN.auftrag} Münzen und ${L.LOHN.punkteAuftrag} XP.`); } return; }
       case "karten-thema": ui.thema = arg; render(); return;
       case "sag": sprich(arg); return;
       case "sag-en": sprich([[arg, "en"]]); return;
@@ -1022,7 +1160,8 @@
       // Tier
       case "tier": gehe("tier", { reiter: "futter" }); return;
       case "tier-reiter": ui.reiter = arg; render(); return;
-      case "streicheln": if (ui.ansicht === "start") { gehe("tier", { reiter: "futter" }); return; } tierReagiert("jubel", pick(["Das kitzelt!", "Hihi!", "Ich hab dich lieb!", "Noch mal!"]), 1600); return;
+      case "theme": { const t = L.THEMES.find((x) => x.id === arg); if (t && level() >= t.ab) { S.theme = t.id; speichern(); render(); } return; }
+      case "streicheln": if (ui.ansicht === "start") { gehe("tier", { reiter: "futter" }); return; } tierReagiert("jubel", pick(["Wuff.", "Noch mal.", "Kraulen ist gut."]), 1500); return;
       case "kaufen": {
         const d = L.shopDing(arg); if (!d) return;
         if (L.SHOP.zubehoer.includes(d) && S.besitz.includes(d.id)) {
@@ -1032,8 +1171,8 @@
         const r = L.kaufe(S, arg);
         if (!r.ok) { if (r.grund === "muenzen") tierReagiert(null, `Dafür fehlen noch ${r.fehlt} Münzen. Die bekommst du beim Üben!`, 2600); return; }
         speichern();
-        if (r.snack) tierReagiert(d.id === "wasser" ? "jubel" : "mampf", d.id === "wasser" ? "Schlabber, schlabber! Danke!" : pick(["Mmh, lecker!", "Mjam! Danke!", "Das schmeckt!", "Lecker, mehr davon!"]), 2200);
-        else { tierReagiert("jubel", L.SHOP.zimmer.includes(d) ? "Wie schön mein Zimmer wird!" : "Steht mir das?", 2000); konfetti(); }
+        if (r.snack) tierReagiert(d.id === "wasser" ? "jubel" : "mampf", d.id === "wasser" ? "Schlabber." : pick(["Mmh.", "Lecker.", "Mehr davon."]), 2000);
+        else tierReagiert("jubel", L.SHOP.zubehoer.includes(d) ? "Neuer Look." : "Neu im Zimmer.", 1800);
         return;
       }
       // Eltern
@@ -1070,6 +1209,11 @@
       }
       case "dialog-zu": ui.sicherFrage = false; render(); return;
       case "tor-zu": ui.tor = null; render(); return;
+      case "levelup-zu": ui.levelUp = null; render(); return;
+      case "spiel-weiter": { const o = app.querySelector(".spiel .spiel-ende"); if (o) o.remove(); if (spielCtrl) spielCtrl.pause(false); return; }
+      case "spielhalle": gehe("spielhalle"); return;
+      case "spiel-start": spielStarten(arg); return;
+      case "spiel-abbrechen": if (spielCtrl) { ui.spielAbbruch = true; spielCtrl.ende(); } else gehe("spielhalle"); return;
       case "tor-ok": {
         const v = Number((document.getElementById("tor-eingabe") || {}).value);
         if (ui.tor && v === ui.tor.a * ui.tor.b) { ui.tor = null; gehe("eltern", { reiter: "fortschritt" }); }
@@ -1107,6 +1251,7 @@
     if (t.id === "e-etappe") e2.etappe = Number(t.value);
     if (t.id === "e-pauseSek") e2.pauseSek = Number(t.value);
     if (t.id === "e-probe") e2.probeAnzahl = Number(t.value);
+    if (t.id === "e-spiele") e2.spieleProTag = Number(t.value);
     if (t.id === "e-pause") e2.pause = t.checked;
     if (t.id === "e-toene") e2.toene = t.checked;
     if (t.id === "e-ruhig") e2.ruhig = t.checked;
@@ -1120,6 +1265,6 @@
   if ("serviceWorker" in navigator && location.protocol !== "file:" && !TEST.keinSW) navigator.serviceWorker.register("sw.js").catch(() => { /* ohne Offline weiter */ });
 
   // Für die Tests: lesender Zugriff
-  window.__LN = { stand: () => S, ui: () => ui, aufgabe: () => (ui.runde ? ui.runde.task : null), version: VER, speichern };
+  window.__LN = { stand: () => S, ui: () => ui, aufgabe: () => (ui.runde ? ui.runde.task : null), version: VER, speichern, spiel: () => spielCtrl };
   render();
 })();
