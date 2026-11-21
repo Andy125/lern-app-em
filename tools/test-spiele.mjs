@@ -1,4 +1,4 @@
-// Tests der Spiellogik: Regeln der Blöcke und Physik des Runs. Ein Autopilot spielt den Run viele Minuten lang:
+// Tests der Spiellogik: Physik von Sky Jump und Run. Ein Autopilot spielt beide viele Minuten lang:
 // Schafft er es, ist jede erzeugte Strecke auch für ein Kind machbar.
 // Aufruf: node tools/test-spiele.mjs
 import fs from "node:fs";
@@ -10,87 +10,94 @@ const ctx = { Math, Date, Array, Object, JSON, console };
 ctx.window = ctx; ctx.globalThis = ctx; ctx.devicePixelRatio = 1;
 vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(path.join(PUBLIC, "spiele.js"), "utf8"), ctx, { filename: "spiele.js" });
-const { BLOECKE: B, RUN } = ctx.LN_SPIELE;
+const { SPRUNG: SP, RUN } = ctx.LN_SPIELE;
 const { ok, ende } = pruefer("Spiele");
 
-// ---------- Blöcke: Formen ----------
-for (const typ of B.TYPEN) {
-  const start = B.gedreht(typ, 0).map((p) => p.join()).sort().join("|");
-  for (let r = 0; r < 4; r++) {
-    const z = B.gedreht(typ, r);
-    ok(z.length === 4 && new Set(z.map((p) => p.join())).size === 4, `${typ} Drehung ${r}: vier verschiedene Felder`);
-    ok(z.every(([x, y]) => x >= 0 && y >= 0 && x < 4 && y < 4), `${typ} Drehung ${r}: im 4×4-Raster`);
+const DT = 1 / 60;
+// ---------- Sky Jump: Physik ----------
+const W = SP.BREITE;
+function flug(vy) { const s = SP.neu(1); s.plattformen = []; s.y = 1000; s.kamera = 0; s.vy = vy; let max = s.y, i = 0; s.obenY = 1e9; while (s.vy > 0 && i++ < 400) { SP.schritt(s, 1 / 120, {}); max = Math.max(max, s.y); } return max - 1000; }
+{
+  const h = flug(SP.V), f = flug(SP.FEDER);
+  ok(Math.abs(h - (SP.V * SP.V) / (2 * SP.G)) < 8, `normaler Sprung ca. 224 hoch (${h.toFixed(0)})`);
+  ok(f > h * 2, `Feder katapultiert mehr als doppelt so hoch (${f.toFixed(0)})`);
+  ok(SP.luecke(0, 1) <= 170 && SP.luecke(1e6, 1) <= 170 && SP.luecke(1e6, 1) < h * 0.8, "größte Lücke bleibt gut unter der Sprunghöhe");
+}
+function leer(y) { const s = SP.neu(2); s.plattformen = []; s.knochen = []; s.obenY = 1e9; s.x = 180; s.y = y; s.kamera = 0; return s; }
+{
+  const s = leer(300); s.vy = -10; s.plattformen.push({ x: 140, y: 290, w: 80, typ: "normal", vx: 0 });
+  for (let i = 0; i < 20; i++) SP.schritt(s, 1 / 60, {});
+  ok(s.vy > 0 && s.spruenge === 1 && s.y > 290, "von oben auf die Wolke: der Hund springt wieder hoch");
+  const u = leer(200); u.vy = SP.V; u.plattformen.push({ x: 140, y: 260, w: 80, typ: "normal", vx: 0 });
+  for (let i = 0; i < 10; i++) SP.schritt(u, 1 / 60, {});
+  ok(u.y > 260 && u.spruenge === 0, "von unten fliegt man durch die Wolke hindurch");
+  const b = leer(300); b.vy = -10; b.plattformen.push({ x: 140, y: 290, w: 80, typ: "broeckel", vx: 0 });
+  for (let i = 0; i < 20; i++) SP.schritt(b, 1 / 60, {});
+  ok(b.vy < 0 && b.y < 290 && b.spruenge === 0, "Bröckel-Wolke trägt nicht");
+  const d = leer(300); d.vy = -10; d.plattformen.push({ x: 140, y: 290, w: 80, typ: "normal", vx: 0, feder: true });
+  for (let i = 0; i < 20; i++) SP.schritt(d, 1 / 60, {});
+  ok(d.vy > SP.V, "Feder gibt mehr Schwung");
+  const r = leer(400); r.vy = 0; r.x = W - 5;
+  for (let i = 0; i < 15; i++) SP.schritt(r, 1 / 60, { richtung: 1 });
+  ok(r.x >= 0 && r.x < 100 && r.vx > 0, "rechts hinaus, links wieder herein");
+  const k = leer(400); k.vy = 0; k.knochen.push({ x: 180, y: 380 });
+  for (let i = 0; i < 12; i++) SP.schritt(k, 1 / 60, {});
+  ok(k.knochenZahl === 1, "Knochen eingesammelt");
+  const t = SP.neu(3); for (let i = 0; i < 10; i++) SP.schritt(t, SP.ZEITLIMIT / 1000 / 9, {});
+  ok(t.vorbei, "nach der Zeit oder einem Absturz ist die Runde vorbei");
+  const z = SP.neu(4); z.t = SP.ZEITLIMIT / 1000 - 0.001; z.vy = SP.V; SP.schritt(z, 0.01, {});
+  ok(z.vorbei && z.zeitUm, "nach drei Minuten: Zeit um");
+  const f = SP.neu(5); f.plattformen = []; f.kamera = 500; f.y = 520; f.vy = -400; f.obenY = 1e9;
+  for (let i = 0; i < 40 && !f.vorbei; i++) SP.schritt(f, 1 / 60, {});
+  ok(f.vorbei && f.grund === "absturz", "unten aus dem Bild gefallen: vorbei");
+}
+// ---------- Sky Jump: jede Strecke ist schaffbar (Autopilot) ----------
+// Er zielt auf eine tragende Wolke, die er noch erreicht, bevor er an ihr vorbeifällt (am liebsten die höchste),
+// und lenkt am Rand auch hinüber. So würde auch ein Kind spielen.
+function zielWolke(s) {
+  const G = SP.G, scheitel = s.y + (s.vy > 0 ? (s.vy * s.vy) / (2 * G) : 0), tod = s.kamera - 45;
+  let best = null, bestWert = -1e9;
+  for (const p of s.plattformen) {
+    if (p.typ === "broeckel" || p.kaputt || p.y <= tod || p.y >= (s.vy > 0 ? scheitel - 40 : s.y)) continue;
+    if (p.typ === "boden" && s.kamera > 0) continue;
+    const zeit = (s.vy + Math.sqrt(Math.max(0, s.vy * s.vy + 2 * G * (s.y - p.y)))) / G;
+    const weg = Math.max(0, Math.abs(SP.abstandX(p.x + p.w / 2, s.x)) - p.w / 2 + 4);
+    const luft = SP.TEMPO * zeit - weg - Math.abs(p.vx) * zeit;
+    if (luft < 15) continue;
+    // lieber nach oben als zurück, und beim einmal gewählten Ziel bleiben
+    const wert = p.y + Math.min(luft, 60) + (p.y > (s.zuletzt ? s.zuletzt.y : 0) ? 5000 : 0) + (p === s.pilotZiel ? 1000 : 0);
+    if (wert > bestWert) { bestWert = wert; best = p; }
   }
-  ok(B.gedreht(typ, 4).map((p) => p.join()).sort().join("|") === start, `${typ}: viermal drehen ergibt die Ausgangsform`);
+  s.pilotZiel = best;
+  return best;
 }
-{
-  const s = B.neu(3); const gezogen = [s.teil.typ, s.naechste];
-  for (let i = 0; i < 12; i++) gezogen.push(B.ziehe(s));
-  ok(B.TYPEN.every((t) => gezogen.filter((x) => x === t).length === 2), "7er-Beutel: in 14 Teilen jede Form genau zweimal");
-  ok(s.grid.every((r) => r.every((c) => c === null)) && !s.vorbei, "neues Spiel: leeres Feld");
+function sprungPilot(s) {
+  const z = zielWolke(s); if (!z) return { richtung: 0 };
+  const dx = SP.abstandX(z.x + z.w / 2, s.x);
+  return { richtung: Math.abs(dx) < 6 ? 0 : dx > 0 ? 1 : -1 };
 }
-{
-  const s = B.neu(5);
-  for (let i = 0; i < 12; i++) B.bewege(s, -1);
-  ok(Math.min(...B.zellen(s.teil).map((p) => p[0])) === 0, "nach links bis an die Wand, nicht weiter");
-  for (let i = 0; i < 12; i++) B.bewege(s, 1);
-  ok(Math.max(...B.zellen(s.teil).map((p) => p[0])) === 9, "nach rechts bis an die Wand, nicht weiter");
-}
-{
-  // Eine Reihe fertig machen
-  const s = B.neu(1);
-  s.grid[19] = [null, null, null, null, "x", "x", "x", "x", "x", "x"];
-  s.grid[18][7] = "y";
-  s.teil = { typ: "I", rot: 0, x: 0, y: 18 };
-  const vorher = s.punkte;
-  B.fest(s);
-  ok(s.linien === 1 && s.punkte - vorher === 100, "volle Reihe: weg, 100 Punkte");
-  ok(s.grid[19][7] === "y" && s.grid[19].filter(Boolean).length === 1, "darüber liegende Reihe rutscht nach");
-}
-{
-  const s = B.neu(1);
-  for (let y = 16; y < 20; y++) s.grid[y] = ["x", "x", "x", "x", "x", "x", "x", "x", "x", null];
-  s.teil = { typ: "I", rot: 1, x: 7, y: 16 };
-  ok(B.zellen(s.teil).every(([x]) => x === 9), "I senkrecht in der letzten Spalte");
-  B.fest(s);
-  ok(s.linien === 4 && s.punkte === 800, "vier Reihen auf einmal: 800 Punkte");
-}
-{
-  const s = B.neu(2); const y0 = s.teil.y; const n = B.ganzRunter(s);
-  ok(n > 15 && s.punkte === 2 * n && s.teil.y === (s.teil.typ === "I" ? -1 : 0), "ganz fallen lassen: 2 Punkte pro Reihe, neues Teil oben");
-  ok(y0 <= 0, "Teil startet oben");
-}
-{
-  const s = B.neu(4); const y0 = s.teil.y;
-  B.tick(s, B.intervall(1));
-  ok(s.teil.y === y0 + 1, "nach einem Takt eine Reihe tiefer");
-  ok(B.intervall(1) === 800 && B.intervall(5) < B.intervall(2) && B.intervall(30) === 90, "schneller mit jedem Level, nie schneller als 90 ms");
-  B.tick(s, B.ZEITLIMIT);
-  ok(s.vorbei && s.zeitUm, "nach vier Minuten ist die Runde vorbei");
-}
-{
-  const s = B.neu(6);
-  for (let y = 0; y < 3; y++) s.grid[y] = Array(10).fill("x");
-  B.spawn(s);
-  ok(s.vorbei, "kein Platz mehr oben: Spiel vorbei");
-}
-// Zufallsspiele: Regeln bleiben immer eingehalten
-for (let seed = 1; seed <= 25; seed++) {
-  const s = B.neu(seed); let r = seed * 7; let alt = 0; let fehlerFrei = true;
-  for (let i = 0; i < 3000 && !s.vorbei; i++) {
-    r = (r * 1103515245 + 12345) >>> 0;
-    const a = r % 7;
-    if (a === 0) B.bewege(s, -1); else if (a === 1) B.bewege(s, 1); else if (a === 2) B.drehe(s); else if (a === 3) B.fallen(s, true); else if (a === 4 && r % 5 === 0) B.ganzRunter(s); else B.tick(s, 120);
-    if (!s.vorbei && !B.passt(s, s.teil)) fehlerFrei = false;
-    if (s.grid.some((reihe) => reihe.every((c) => c !== null))) fehlerFrei = false;
-    if (s.punkte < alt || s.level !== 1 + Math.floor(s.linien / 10)) fehlerFrei = false;
-    alt = s.punkte;
+let hoechst = 0, wandernd = 0, broeckel = 0, federn = 0, minHoehe = 1e9;
+for (let seed = 1; seed <= 30; seed++) {
+  const s = SP.neu(seed); let t = 0, letzte = s.plattformen[0]; const gesehen = new Set();
+  while (t < 170 && !s.vorbei) {
+    SP.schritt(s, DT, sprungPilot(s)); t += DT;
+    for (const p of s.plattformen) if (!gesehen.has(p)) {
+      gesehen.add(p);
+      if (p.typ === "wandert") wandernd++; if (p.typ === "broeckel") broeckel++; if (p.feder) federn++;
+      if (p.weg && p !== letzte && p.typ !== "boden") {
+        ok(p.y - letzte.y <= 170 + 1e-9 && p.y > letzte.y, `Seed ${seed}: Lücke auf dem Weg höchstens 170 (${(p.y - letzte.y).toFixed(0)})`);
+        if (letzte.typ !== "boden") ok(Math.abs(p.mitte - letzte.mitte) + (p.typ === "wandert" ? SP.SPANNE : 0) + (letzte.typ === "wandert" ? SP.SPANNE : 0) <= 200, `Seed ${seed}: seitlich erreichbar, auch wenn die Wolken wandern`);
+        letzte = p;
+      }
+    }
   }
-  ok(fehlerFrei, `Zufallsspiel ${seed}: Teil passt immer, keine volle Reihe bleibt liegen, Punkte und Level stimmen`);
+  ok(!s.vorbei, `Seed ${seed}: Autopilot schafft 170 Sekunden (${s.grund} nach ${t.toFixed(1)} s in ${Math.floor(s.maxY / 10)} m)`);
+  hoechst = Math.max(hoechst, s.maxY); minHoehe = Math.min(minHoehe, s.maxY);
 }
+ok(minHoehe > 15000, `es geht hoch hinaus, bis in die schwerste Stufe (mind. ${Math.floor(minHoehe / 10)} m)`);
+ok(wandernd > 100 && broeckel > 100 && federn > 20, `alle Wolkenarten kommen vor (${wandernd} wandernd, ${broeckel} Bröckel, ${federn} Federn)`);
 
 // ---------- Run: Physik ----------
-const DT = 1 / 60;
 function hoechsterSprung(halten, doppel) {
   const s = RUN.neu(1); s.naechst = 1e9; let min = s.fuss, i = 0;
   RUN.schritt(s, DT, { druck: true, halten });

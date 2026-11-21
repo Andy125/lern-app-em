@@ -72,7 +72,7 @@ for (const [name, vp] of [["iPad hochkant", IPAD_HOCH], ["iPad quer", IPAD_QUER]
   await page.click(".arcade [data-act=spielhalle]");
   await messe(page, name + " Spielhalle");
   await foto("spielhalle");
-  for (const art of ["run", "bloecke"]) {
+  for (const art of ["run", "sprung"]) {
     await page.click(`[data-act=spiel-start][data-arg=${art}]`);
     await page.waitForTimeout(400);
     await messe(page, `${name} Spiel ${art}`);

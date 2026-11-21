@@ -133,19 +133,21 @@ ok((await page.locator(".etappe-punkt.fertig").count()) === 3, "drei Haken bei d
   await page.evaluate(() => window.__LN.speichern());
   await page.click(".spiel-ende [data-act=spielhalle]");
   ok((await ansicht(page)) === "spielhalle" && (await stand(page)).tokens === tk - 1, "zurück in der Spielhalle, kein Token verloren");
-  // Blöcke
-  await page.click("[data-act=spiel-start][data-arg=bloecke]");
-  await page.waitForTimeout(300);
-  const z0 = await page.evaluate(() => { const z = window.__LN.spiel().zustand(); return { x: z.teil.x, r: z.teil.rot, typ: z.teil.typ }; });
-  await page.click("[data-spiel=links]");
-  await page.click("[data-spiel=drehen]");
-  const z1 = await page.evaluate(() => { const z = window.__LN.spiel().zustand(); return { x: z.teil.x, r: z.teil.rot }; });
-  ok(z1.x === z0.x - 1 && (z1.r !== z0.r || z0.typ === "O"), `Blöcke: Knöpfe verschieben und drehen (${z0.typ})`);
-  await page.click("[data-spiel=fallen]");
-  ok((await page.evaluate(() => window.__LN.spiel().zustand().punkte)) > 0, "Fallenlassen gibt Punkte");
-  await foto("08f-bloecke");
+  // Sky Jump
+  await page.click("[data-act=spiel-start][data-arg=sprung]");
+  await page.waitForTimeout(700);
+  ok((await page.evaluate(() => window.__LN.spiel().zustand().maxY)) > 40, "Sky Jump: der Hund springt von allein nach oben");
+  await page.dispatchEvent("[data-spiel=links]", "mousedown");
+  await page.waitForTimeout(250);
+  ok((await page.evaluate(() => window.__LN.spiel().zustand().vx)) < -100, "Knopf gedrückt halten lenkt nach links");
+  await page.dispatchEvent("[data-spiel=links]", "mouseup");
+  await page.waitForTimeout(250);
+  ok(Math.abs(await page.evaluate(() => window.__LN.spiel().zustand().vx)) < 100, "loslassen bremst");
+  ok((await page.textContent("#hud-hoehe")).includes(" m"), "Höhe wird angezeigt");
+  await foto("08f-sprung");
   await page.click("[data-act=spiel-abbrechen]");
-  ok((await page.textContent(".spiel-ende")).includes("Spiel beendet"), "Abbrechen zeigt das Ergebnis");
+  ok((await page.textContent(".spiel-ende")).includes("Spiel beendet") && (await page.textContent(".spiel-ende")).includes("m hoch"), "Abbrechen zeigt das Ergebnis mit Höhe");
+  ok((await stand(page)).spiele.sprung.runden === 1, "Sky-Jump-Runde gezählt");
   await page.click(".spiel-ende [data-act=spielhalle]");
   // Tageslimit
   await page.evaluate(() => { const s = window.__LN.stand(); s.tokens = 5; s.einst.spieleProTag = 2; window.__LN.speichern(); });
@@ -310,10 +312,10 @@ ok((await page.textContent("main")).includes("Testhund") && !(await page.textCon
 await keinPlatzhalter("Lernkarten mit Hundename");
 await heim();
 ok((await page.textContent(".countdown")).includes("14 Tage") && (await page.textContent(".countdown")).includes("Bio-Arbeit"), "Countdown zur Arbeit");
-ok((await page.textContent(".mission")).includes("Bio: Neues zu «Das Skelett»") && (await page.textContent(".mission")).includes("Aufwärmen Englisch"), "Mission zeigt Schwerpunkt Bio (Arbeit zuerst) und Aufwärmen Englisch");
+ok((await page.textContent(".mission")).includes("Bio: Neues zu «Das Skelett»") && /Aufwärmen (Englisch|Mathe)/.test(await page.textContent(".mission")), "Mission zeigt Schwerpunkt Bio (Arbeit zuerst) und ein anderes Fach zum Aufwärmen");
 
 // ---------- Englisch: Fach wählen, Vokabeln, strenge Rechtschreibung ----------
-ok((await page.locator(".fach-tab").count()) === 2, "zwei Fächer als Reiter");
+ok((await page.locator(".fach-tab").count()) === 3, "drei Fächer als Reiter");
 await page.click("[data-act=fach][data-arg=englisch]");
 ok((await stand(page)).fach === "englisch" && (await page.locator(".fach-tab.aktiv").textContent()).includes("Englisch"), "Englisch gewählt");
 await page.click("[data-act=karten]");
@@ -338,8 +340,120 @@ await page.click("[data-act=weiter]");
 while ((await ansicht(page)) === "runde") { const st = await page.evaluate(() => window.__LN.ui().runde.status); if (st === "richtig" || st === "loesung") await page.click("[data-act=weiter]"); else await loese(page); }
 ok((await stand(page)).fortschritt.englisch && Object.keys((await stand(page)).fortschritt.englisch).length >= 5, "Fortschritt im Fach Englisch");
 await heim();
-await page.click("[data-act=fach][data-arg=bio]");
 await keinPlatzhalter("Englisch");
+
+// ---------- Mathe: Erklärung mit Check, Rechen-Werkstatt, Detektiv, Ergebnis, Probe ----------
+await page.click("[data-act=fach][data-arg=mathe]");
+ok((await page.locator("[data-act=erklaerungen] .zahl-badge").textContent()) === "6", "So geht's: sechs Erklärungen offen");
+await page.click("[data-act=erklaerungen]");
+ok((await page.locator(".thema-karte").count()) === 6, "eine Erklärung je Thema");
+const erklaere = async (thema, richtigZuerst) => {
+  await page.click(`[data-act=erkl][data-arg="mathe:${thema}"]`);
+  while (await page.locator("[data-act=erkl-weiter]").count()) await page.click("[data-act=erkl-weiter]");
+  const fo = await page.evaluate((th) => window.LN_FAECHER.find((f) => f.id === "mathe").themen.find((t) => t.id === th).erklaerung.slice(-1)[0].check, thema);
+  const texte = await page.$$eval("[data-act=erkl-check]", (b) => b.map((x) => x.textContent));
+  if (!richtigZuerst) { await page.click(`[data-act=erkl-check][data-arg="${texte.findIndex((t) => t !== fo.antwort)}"]`); ok((await page.locator(".erkl-check .rueck.tipp").count()) === 1, "falsche Check-Antwort: freundlicher Hinweis"); }
+  await page.click(`[data-act=erkl-check][data-arg="${texte.indexOf(fo.antwort)}"]`);
+};
+let xp = (await stand(page)).punkte;
+await erklaere("verstehen", false);
+ok((await stand(page)).punkte === xp && !(await stand(page)).gesehen["mathe/verstehen"], "Check erst im zweiten Versuch: noch keine XP");
+await foto("17-erklaerung-check");
+await page.click("[data-act=erkl-fertig]");
+ok((await ansicht(page)) === "erklaerungen", "Fertig führt zurück zur Liste");
+await erklaere("verstehen", true);
+await levelUpZu(page);
+ok((await stand(page)).punkte === xp + 15 && (await stand(page)).gesehen["mathe/verstehen"] === H, "Check auf Anhieb: +15 XP, gemerkt");
+await page.click("[data-act=erkl-fertig]");
+await levelUpZu(page);
+ok((await page.locator(".thema-karte.geschafft").count()) === 1, "geschaffte Erklärung ist markiert");
+await heim();
+// Werkstatt
+await page.click("[data-act=themen]");
+await page.click("[data-act=thema][data-arg=combo]");
+ok((await page.locator("[data-act=erkl].haupt").count()) === 1, "neues Thema: Erklärung wird zuerst angeboten");
+await page.click("[data-act=etappe-los]");
+const setzeAufgabe = (teil, modus, seed) => page.evaluate(([teil, modus, seed]) => { const R = window.__LN.ui().runde; R.specs.splice(R.i + 1, 0, { teil, modus, seed }); }, [teil, modus, seed]);
+const naechste = async () => { const st = await page.evaluate(() => window.__LN.ui().runde.status); if (st === "offen" || st === "tipp") await loese(page); await page.click("[data-act=weiter]"); };
+await setzeAufgabe("m-d4", "teilen-werkstatt", 21);
+await naechste();
+let mm = (await stand(page)).muenzen;
+t = await aufgabe(page);
+ok(t.art === "division" && (await page.locator(".leiter").count()) === 1 && (await page.locator(".moves .move").count()) === 4, "Werkstatt mit Moves-Leiste und Einmaleins-Leiter");
+{
+  const { divSchritt, tippeDivision } = await import("./helfer.mjs");
+  let z = await divSchritt(page);
+  await tippeDivision(page, z.start, "start", z.anfaenge);
+  z = await divSchritt(page);
+  ok(z.typ === "ziffer" && (await page.textContent(".prompt")).includes("Wie oft passt"), "geführt: Frage zum Teilen");
+  await tippeDivision(page, z.wert + 1 > 9 ? z.wert - 1 : z.wert + 1, "ziffer");
+  const hinweis = await page.textContent(".prompt");
+  ok(/Zu viel|noch mehr/.test(hinweis), `falsche Ziffer: Hinweis erklärt den Fehler («${hinweis}»)`);
+  await foto("18-werkstatt-hinweis");
+  ok((await stand(page)).fehler.mathe.includes(t.teil), "Fehler kommt in die Fehlerkiste");
+  await loese(page);
+  ok((await page.evaluate(() => window.__LN.ui().runde.status)) === "richtig" && (await stand(page)).muenzen === mm, "mit einem Fehler geschafft: keine Münze");
+}
+await page.click("[data-act=weiter]");
+await setzeAufgabe("m-d3", "teilen-werkstatt", 22);
+await naechste();
+mm = (await stand(page)).muenzen;
+// fehlerfrei mit der Tastatur
+for (let i = 0; i < 60; i++) {
+  const { divSchritt } = await import("./helfer.mjs"); const z = await divSchritt(page);
+  if (z.status !== "offen") break;
+  if (z.typ === "start") await page.click(`[data-act=div-start][data-arg="${z.anfaenge.indexOf(z.start)}"]`);
+  else if (z.typ === "runter") await page.keyboard.press("Enter");
+  else { await page.keyboard.type(String(z.wert)); if (z.typ !== "ziffer") await page.keyboard.press("Enter"); }
+}
+ok((await page.evaluate(() => window.__LN.ui().runde.status)) === "richtig" && (await page.locator(".stempel").count()) === 1 && (await stand(page)).muenzen === mm + 1, "fehlerfrei mit der Tastatur: Perfekt-Stempel und Münze");
+await foto("19-werkstatt-perfekt");
+await page.click("[data-act=weiter]");
+await setzeAufgabe("m-d3", "teilen-profi", 23);
+await naechste();
+{
+  const { divSchritt, tippeDivision } = await import("./helfer.mjs");
+  ok((await page.locator(".leiter").count()) === 0, "Profi-Modus: ohne Leiter");
+  const z = await divSchritt(page);
+  const vorher = await page.evaluate(() => window.__LN.ui().runde.specs.length);
+  await tippeDivision(page, z.anfaenge.find((a) => a !== z.start), "start", z.anfaenge);
+  await tippeDivision(page, z.anfaenge.find((a) => a !== z.start), "start", z.anfaenge);
+  ok((await page.textContent(".prompt")).includes("Ich trage es für dich ein"), "zweimal falsch: die App hilft und trägt ein");
+  await loese(page);
+  ok((await page.evaluate(() => window.__LN.ui().runde.status)) === "loesung" && (await page.evaluate(() => window.__LN.ui().runde.specs.length)) === vorher + 1, "mit Hilfe geschafft: kommt mit neuen Zahlen noch einmal");
+}
+await page.click("[data-act=weiter]");
+await setzeAufgabe("m-det-null", "detektiv", 24);
+await naechste();
+t = await aufgabe(page);
+await falsch(page);
+ok((await page.locator(".zeile.falsch").count()) === 1 && (await page.evaluate(() => window.__LN.ui().runde.status)) === "tipp", "Detektiv: falsche Zeile rot, Tipp");
+await loese(page);
+ok((await page.locator(".zeile.richtig").count()) === 1 && (await page.textContent(".rueck.gut")).length > 10, "Detektiv: Fehlerzeile gefunden");
+await foto("20-detektiv");
+await page.click("[data-act=weiter]");
+await setzeAufgabe("m-rest4", "teilen-ergebnis", 25);
+await naechste();
+t = await aufgabe(page);
+await page.fill("#eingabe", String(t.loesung.q)); await page.click("[data-act=pruefen]");
+ok((await page.textContent(".rueck.tipp")).includes("Rest"), "Ergebnis ohne Rest: Hinweis auf den Rest");
+await page.fill("#eingabe-rest", String(t.loesung.r)); await page.click("[data-act=pruefen]");
+ok((await page.evaluate(() => window.__LN.ui().runde.status)) === "richtig", "mit Rest richtig");
+await page.click("[data-act=pause-runde]");
+// Lernkarten mit Beispielrechnung
+await page.click("[data-act=karten]");
+await page.click("[data-act=karten-thema][data-arg=combo]");
+ok((await page.locator(".karten-rechnung .rechnung").count()) >= 3, "Lernkarten zeigen durchgerechnete Beispiele");
+await heim();
+// Probe: auf Papier rechnen, Ergebnis eingeben
+await page.click("[data-act=probe-start]");
+await page.click("[data-act=probe-los]");
+let mp = 0;
+while ((await ansicht(page)) === "probe" && mp < 40) { await loese(page, { probe: true }); mp++; }
+ok((await ansicht(page)) === "probe-ende" && (await stand(page)).proben.mathe[0].prozent === 100, "Mathe-Probe mit 100 %");
+await heim();
+await keinPlatzhalter("Mathe");
+await page.click("[data-act=fach][data-arg=bio]");
 
 // ---------- Sicherung ----------
 await langDruecken(page, "#eltern-knopf", 450);

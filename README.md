@@ -1,6 +1,6 @@
 # Lernnest
 
-Lern-App fürs iPad für die Vorbereitung auf Klassenarbeiten, gestaltet für junge Teenager (dunkles Design, Level und Ränge, Spielhalle). Jeden Tag eine Mission von rund 15 Minuten: drei kurze Etappen mit einer Bewegungspause dazwischen. Wer genau arbeitet, verdient Tokens für zwei kleine Spiele. Mit Münzen pflegt das Kind seinen Hund. Keine Strafen, Sterne und XP gehen nie verloren.
+Lern-App fürs iPad für die Vorbereitung auf Klassenarbeiten in Biologie, Englisch und Mathe, gestaltet für junge Teenager (dunkles Design, Level und Ränge, Spielhalle). Jeden Tag eine Mission von rund 15 Minuten: drei kurze Etappen mit einer Bewegungspause dazwischen. Wer genau arbeitet, verdient Tokens für zwei kleine Spiele. Mit Münzen pflegt das Kind seinen Hund. Keine Strafen, Sterne und XP gehen nie verloren.
 
 Die App ist eine Web-App ohne Build-Schritt (reines JavaScript im Ordner `public/`), läuft offline und wird über GitHub Pages veröffentlicht.
 
@@ -14,7 +14,7 @@ Oben rechts steht die Versionsnummer. So sieht man nach einem Update, ob die neu
 
 ## Was die App kann
 
-- **Tagesmission**: drei Etappen à 6 Aufgaben (Aufwärmen, Neues entdecken, Festigen), dazwischen 30 Sekunden Bewegung. Bei mehreren Fächern ist es eine gemeinsame Mission: Das Fach mit der nächsten Arbeit bekommt «Neues» und «Festigen», ein anderes Fach wird zum Aufwärmen wiederholt. In den zwei Tagen vor einer Arbeit gehört die ganze Mission diesem Fach. Haben beide Fächer keinen Termin (oder denselben), wechselt der Schwerpunkt jeden Tag. Wer mittendrin aufhört, macht später mit der nächsten Etappe weiter. Danach gibt es Bonus-Runden ohne Limit.
+- **Tagesmission**: drei Etappen à 6 Aufgaben (Aufwärmen, Neues entdecken, Festigen), dazwischen 30 Sekunden Bewegung. Bei mehreren Fächern ist es eine gemeinsame Mission: Das Fach mit der nächsten Arbeit bekommt «Neues» und «Festigen», ein anderes Fach wird zum Aufwärmen wiederholt (welches, wechselt täglich). In den zwei Tagen vor einer Arbeit gehört die ganze Mission diesem Fach. Haben beide Fächer keinen Termin (oder denselben), wechselt der Schwerpunkt jeden Tag. Wer mittendrin aufhört, macht später mit der nächsten Etappe weiter. Danach gibt es Bonus-Runden ohne Limit.
 - **Plan bis zur Arbeit**: Mit dem Datum der Arbeit verteilt die App die Themen auf die Tage. Zwei Tage vorher eine Probe-Arbeit, am Tag davor nur Wiederholen, am Tag selbst eine kurze Mutmacher-Runde.
 - **Aufgabenarten**: Auswahl, Stimmt/Stimmt nicht, mehrere antippen, Reihenfolge, Zuordnen, Lückentext mit Wortkasten, Begriff schreiben, Zahl eingeben, Bild beschriften und Stelle im Bild antippen.
 - **Hilfe in Stufen**: auf Wunsch ein Tipp; nach dem ersten Fehler ein Tipp, Richtiges bleibt stehen; nach dem zweiten Fehler die Lösung mit Erklärung und Merkhilfe. Die Aufgabe kommt in derselben Etappe noch einmal.
@@ -26,7 +26,11 @@ Oben rechts steht die Versionsnummer. So sieht man nach einem Update, ob die neu
 - **Probe-Arbeit** wie eine echte Arbeit: keine Rückmeldung zwischendurch, Überspringen möglich, am Ende Ergebnis je Thema.
 - **Belohnung nach Leistung**: Münzen gibt es nur für Aufgaben, die auf Anhieb richtig sind (+1, alle 5 in Folge +1 extra). XP: 10 auf Anhieb, 3 nach einem Fehler. Eine Etappe bringt 2 Münzen ab der Hälfte richtig und 10 XP ab 80 %. Wiederholte Aufgaben zählen nicht als «auf Anhieb».
 - **Level und Ränge**: Level 2 ab 100 XP, jedes weitere Level braucht 100 XP mehr. Ränge Rookie, Explorer (3), Pro (6), Expert (10), Legend (15). Mit dem Level werden App-Designs frei (Nacht, Hell, Ozean ab 3, Sunset ab 5, Galaxy ab 8).
-- **Spielhalle**: Ein Token ist eine Spielrunde. Tokens gibt es für jede Etappe mit mindestens 80 % auf Anhieb (5 von 6), für die geschaffte Mission und für eine Probe-Arbeit ab 80 %. Zwei Spiele: «Run» (der eigene Hund springt über Hindernisse und Gruben, sammelt Knochen) und «Blöcke» (fallende Steine, vier Minuten). Höchstens 5 Runden am Tag, einstellbar.
+- **Spielhalle**: Ein Token ist eine Spielrunde. Tokens gibt es für jede Etappe mit mindestens 80 % auf Anhieb (5 von 6), für die geschaffte Mission und für eine Probe-Arbeit ab 80 %. Zwei Spiele: «Sky Jump» (der Hund springt von Wolke zu Wolke nach oben bis ins All, gelenkt mit links und rechts, wandernde Wolken, Bröckel-Wolken und Federn, drei Minuten) und «Run» (der eigene Hund springt über Hindernisse und Gruben, sammelt Knochen). Höchstens 5 Runden am Tag, einstellbar. Das frühere Spiel «Blöcke» ist ab Version 6 weg, sein Rekord bleibt im Spielstand.
+- **Mathe: schriftlich dividieren** (Divisor höchstens zweistellig, wie im Bildungsplan Klasse 5/6). Sechs Themen von «Teilen verstehen» bis «Rechnen im Alltag». Die Zahlen erzeugt die App jedes Mal neu, nichts lässt sich auswendig lernen.
+  - **Rechen-Werkstatt**: Die Division wird auf Karopapier Schritt für Schritt gerechnet, wie im Heft: Anfang wählen, dann die «4-Move-Combo» Teilen, Mal, Minus, Runter. Eingabe über einen Ziffernblock. Jeder Schritt wird sofort geprüft, ein Fehler bekommt einen Hinweis, der genau diesen Fehler erklärt («Zu viel: 8 · 6 = 48, das ist mehr als 42»). Nach zwei Fehlern an derselben Stelle trägt die App die Zahl ein. Stufen: zuerst geführt mit Einmaleins-Leiter, dann Profi-Modus ohne Hilfen, dann nur noch das Ergebnis (gerechnet auf Papier, wie in der Arbeit). Auf Anhieb zählt nur eine Rechnung ganz ohne Fehler; dafür gibt es den Stempel «Perfekt».
+  - **So geht's**: Erklärungen je Thema mit Bildern (Geld verteilen und wechseln, damit klar wird, warum man «runterholt») und durchgerechneten Beispielen. Am Ende ein Check; wer ihn auf Anhieb schafft, bekommt einmal 15 XP.
+  - **Aufgabenarten**: Detektiv (in einer fertigen Rechnung den einen Fehler finden: vergessene 0, falsch abgezogen, falsch malgenommen), Überschlag (wie groß ist das Ergebnis ungefähr, kann das stimmen?), fehlende Zahl (Probe rückwärts), Kopfrechnen mit Nullen, «Wie oft passt 23 in 98?», Sachaufgaben (volle Tüten, alle unterbringen, was bleibt übrig) und Boss-Aufgaben mit Extra-Münzen.
 - **Das Tier**: Hund (Labrador in Foxred), Katze, Hase, Fuchs, Panda oder Hamster, eigene Zeichnungen. Es wächst mit den Punkten (Baby oder Welpe, Klein, Groß, Held). Bezahlt wird mit goldenen Münzen. Der Hund bekommt nur Hundefutter (Wasser, Futter, Leckerli, Hundekeks, Kauknochen, Kaustange), ins Zimmer kommen Hundekorb, Decke, Napf und Spielzeug.
 
 ## Ältere iPads
@@ -85,6 +89,15 @@ Kartentypen (jede Karte braucht eine eindeutige `id`; `tipp`, `erklaerung`, `mer
 | `bild` | `titel`, `viewBox`, `svg`, `marken: [{ nr, x, y, begriff }]` | Nummer benennen, Stelle antippen, Begriff schreiben |
 | `vokabel` | `en`, `de`, `auchEn` (weitere richtige Schreibweisen), `satz` mit einer `{Lücke}`, `satzFalsch` | Englisch → Deutsch wählen, Deutsch → Englisch wählen, Englisch schreiben (streng), Lückensatz |
 | `auftrag` | `titel`, `text`, `art` (`basteln`, `forschen`, `bewegen`) | Mitmach-Auftrag unter «Forschen & Basteln», keine Quizfrage |
+| `teilen` | `titel`, `stellen`, `divisor` ([von, bis]), `rest`, `null` (true: muss, false: darf nicht), `anfang` (`gross`, `klein`), `boss` | Schriftliche Division: Werkstatt, Profi, nur Ergebnis |
+| `detektiv` | `titel`, `stellen`, `divisor`, `fehler` (`null`, `minus`, `mal`) | Fehler in einer fertigen Rechnung finden |
+| `ueberschlag` | `titel`, `stellen`, `divisor` | Größe des Ergebnisses wählen, «Kann das stimmen?» |
+| `umkehr` | `titel`, `stellen` (des Ergebnisses), `divisor`, `rest` | «☐ : 7 = 86»: fehlende Zahl |
+| `kopf` | `titel`, `form` (`einmaleins`, `nullen`, `zehner`) | Kopfrechnen |
+| `passt` | `titel`, `divisor` | «Wie oft passt 23 in 98?» |
+| `sach` | `titel`, `text` mit `{a}` und `{b}`, `frage`, `antwort` (`q` Ergebnis, `r` Rest, `auf` eins mehr für den Rest), `a`, `b` ([von, bis]), `rest`, `einheit` | Sachaufgabe mit neuen Zahlen |
+
+Ein Thema kann `erklaerung` haben: eine Liste von Folien mit `titel`, `text` (Absätze), `bild` (SVG, 640 breit), `rechnung` (`{ a, b, bis }`, `bis` ist die Anzahl gezeigter Schritte oder `"alles"`, `leiter: true` zeigt die Einmaleins-Leiter) und am Ende `check` (`frage`, `antwort`, `falsch`, `erklaerung`). Die Erklärung erscheint unter «So geht's», in den Lernkarten und am Anfang einer Etappe mit neuem Stoff.
 
 Ein Thema mit `bonus: true` (zum Beispiel «Hunde-Englisch») gibt es beim freien Üben und in den Lernkarten, es zählt aber nicht für den Plan bis zur Arbeit und nicht für die Probe.
 
@@ -100,8 +113,8 @@ Bei Bildern müssen die Marken mindestens 40 Bildeinheiten auseinanderliegen (de
 npm ci                                  # einmal: Playwright installieren
 npx playwright install chromium         # einmal: Browser für die Tests
 npm test                                # Logik, Inhalte, Version (schnell)
-node tools/test-logic.mjs               # jede Aufgabe aus jedem Startwert unabhängig nachgerechnet
-node tools/test-spiele.mjs              # Spielregeln; ein Autopilot zeigt, dass jede Run-Strecke schaffbar ist
+node tools/test-logic.mjs               # jede Aufgabe aus jedem Startwert unabhängig nachgerechnet (Divisionen von Hand)
+node tools/test-spiele.mjs              # Spielregeln; ein Autopilot zeigt, dass jede Strecke in Sky Jump und Run schaffbar ist
 node tools/e2e.mjs [ordner]             # spielt die App wie ein Kind durch, optional mit Screenshots
 node tools/e2e-speicher.mjs             # Spielstand: Neuladen, Kopie, IndexedDB, kaputter und alter Stand
 node tools/e2e-geraete.mjs [ordner]     # iPad hochkant, quer, Handy: Überlauf, Tippflächen, Schriftgröße

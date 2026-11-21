@@ -142,7 +142,7 @@ label .eingabe { margin-top: 4px; }
 .sprechblase { background: var(--flaeche2); border-radius: 14px; padding: 10px 12px; font-size: 15px; color: var(--text); }
 .sprechblase b { color: var(--lila); }
 .zimmer-box .sprechblase { position: absolute; top: 12px; right: 12px; max-width: 46%; background: rgba(30, 27, 54, .88); color: #F3F0FF; }
-.kacheln { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+.kacheln { display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); gap: 10px; }
 .kachel { background: transparent; border: 1.5px solid var(--rand); border-radius: 16px; min-height: 84px; padding: 10px 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-weight: 600; font-size: 15px; color: var(--text); position: relative; }
 .kachel span { font-size: 24px; }
 .kachel:disabled { opacity: .45; }
@@ -326,18 +326,94 @@ table.vokabeln .vorlesen.klein { float: none; }
 .hud b { color: var(--text); font-size: 18px; }
 .run-platz { background: var(--flaeche); border-radius: 18px; overflow: hidden; }
 .run-platz canvas { display: block; touch-action: none; }
-.bloecke-layout { display: flex; gap: 14px; justify-content: center; align-items: flex-start; }
-.spiel-feld-platz { flex: 0 1 auto; display: flex; justify-content: center; }
-.spiel-feld-platz canvas { border-radius: 12px; touch-action: none; display: block; }
-.bloecke-info { display: flex; flex-direction: column; gap: 10px; font-size: 14px; color: var(--leise); min-width: 92px; }
-.bloecke-info b { display: block; font-family: "Sora", system-ui, sans-serif; color: var(--text); font-size: 22px; }
-.bloecke-info canvas { background: var(--flaeche); border-radius: 12px; display: block; margin-top: 4px; }
+.sprung-platz { display: flex; justify-content: center; }
+.sprung-platz canvas { border-radius: 18px; display: block; touch-action: none; -webkit-user-select: none; user-select: none; }
+.sprung-info { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 110px; }
+.sprung-info b { font-family: "Sora", system-ui, sans-serif; font-size: 24px; font-weight: 800; }
+.sprung-info small { color: var(--leise); font-size: 14px; }
+.spiel-sprung .steuerung { align-items: center; }
+.spiel-sprung .steuerung button { width: 120px; height: 68px; font-size: 30px; }
 .steuerung { display: flex; justify-content: center; gap: 12px; margin-top: 14px; }
 .steuerung button { width: 72px; height: 64px; border-radius: 18px; border: 1.5px solid var(--rand); background: var(--flaeche2); color: var(--text); font-size: 26px; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: none; }
 .steuerung button:active { background: var(--lila-hell); border-color: var(--lila); }
 .spiel-ende { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: flex; align-items: center; justify-content: center; background: rgba(14, 12, 30, .72); border-radius: 18px; padding: 16px; z-index: 5; }
 .spiel-ende .dialog { text-align: center; }
 .spiel-ende .zahl { font-size: 52px; font-weight: 800; line-height: 1; margin: 6px 0; }
+
+/* Mathe: Rechnung auf Karopapier, Moves, Ziffernblock, Detektiv */
+.werkstatt { display: flex; flex-direction: column; align-items: center; gap: 14px; margin-top: 10px; }
+.werkstatt-blatt, .detektiv-blatt, .erkl-rechnung, .karten-rechnung, .loesungs-rechnung { background: #fffdf8; border-radius: 16px; padding: 12px; max-width: 100%; overflow-x: auto; color: #2b2550; }
+.detektiv-blatt, .erkl-rechnung { margin-top: 12px; }
+.loesungs-rechnung, .karten-rechnung { margin: 10px 0; display: inline-block; }
+.rechnung { --zelle: min(44px, calc((min(100vw, 900px) - 96px) / var(--spalten)), calc((100vh - 420px) / var(--zeilen))); --zeile: var(--zelle);
+  display: grid; margin: 0 auto; width: -webkit-max-content; width: max-content; font-family: "Sora", system-ui, sans-serif; font-weight: 600; font-size: calc(var(--zelle) * .64); color: #2b2550;
+  background-image: linear-gradient(#e6e0f6 1px, transparent 1px), linear-gradient(90deg, #e6e0f6 1px, transparent 1px); background-size: var(--zelle) var(--zeile); }
+.rechnung .z { display: flex; align-items: center; justify-content: center; position: relative; z-index: 1; pointer-events: none; line-height: 1; }
+.rechnung .z.u { border-bottom: 3px solid #2b2550; }
+.rechnung .z.zeichen { color: #7a7399; }
+.rechnung .z.divisor { color: #2a6fdb; }
+.rechnung .z.ergebnis { color: #0f9c7e; font-weight: 800; }
+.rechnung .z.rest { color: #e5662a; font-weight: 800; }
+.rechnung .z.anfang { box-shadow: inset 0 -5px 0 #b7a8ff; }
+.rechnung .z.geholt { color: #b9b3d6; }
+.rechnung .z.waehlbar { background: rgba(183, 168, 255, .28); }
+.rechnung .z.ziel { color: #e5662a; font-weight: 800; animation: puls 1.1s ease-in-out infinite; }
+.rechnung .z.eingabe { color: #e5662a; font-weight: 800; }
+.rechnung .z.leise { color: #c9c3e0; }
+.rechnung .z.cursor { box-shadow: inset 0 0 0 3px #F2773A; border-radius: 6px; background: rgba(242, 119, 58, .12); }
+.rechnung .z.cursor:empty::after { content: ""; width: 2px; height: 55%; background: #F2773A; animation: blinken 1s steps(1) infinite; }
+.rechnung .z.neu { animation: auftauchen .35s ease-out; }
+.rechnung .z.runter.neu { animation: runterholen .5s ease-out; }
+@keyframes puls { 50% { transform: scale(1.18); } }
+@keyframes blinken { 50% { opacity: 0; } }
+@keyframes auftauchen { from { transform: scale(1.6); opacity: .3; } to { transform: none; opacity: 1; } }
+@keyframes runterholen { from { transform: translateY(-260%); opacity: .2; } to { transform: none; opacity: 1; } }
+.rechnung.detektiv { --zeile: max(var(--zelle), 44px); }
+.rechnung .zeile { z-index: 0; border: 0; background: transparent; border-radius: 10px; margin: 1px 0; cursor: pointer; padding: 0; min-height: 40px; }
+.rechnung .zeile:not(:disabled) { box-shadow: inset 0 0 0 1.5px rgba(75, 63, 176, .2); }
+.rechnung .zeile:not(:disabled):active { background: rgba(183, 168, 255, .3); }
+.rechnung .zeile.gewaehlt { background: rgba(183, 168, 255, .4); }
+.rechnung .zeile.falsch { background: rgba(255, 122, 138, .28); }
+.rechnung .zeile.richtig { background: rgba(95, 221, 190, .4); box-shadow: inset 0 0 0 3px #0f9c7e; }
+.moves { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 6px 0 2px; }
+.move { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; border: 1.5px solid var(--rand); color: var(--leise); font-weight: 650; font-size: 15px; }
+.move b { font-family: "Sora", system-ui, sans-serif; font-size: 19px; }
+.move.an { background: var(--akzent); border-color: var(--akzent); color: var(--akzent-text); }
+.move.an.heiss { box-shadow: 0 0 0 5px var(--akzent-weich); }
+.prompt { text-align: center; font-size: 21px; font-weight: 650; margin: 8px 0 0; }
+.prompt.fehler { color: var(--text); background: var(--tipp-hell); border: 1.5px solid var(--tipp); border-radius: 14px; padding: 8px 14px; font-weight: 600; font-size: 18px; }
+.leiter { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 10px; font-size: 14px; color: #5e5980; max-width: 560px; }
+.leiter > b { width: 100%; text-align: center; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; }
+.leiter span { background: #f1eefb; border-radius: 8px; padding: 3px 8px; white-space: nowrap; }
+.leiter span b { color: #2b2550; }
+.ziffernblock { display: grid; grid-template-columns: repeat(3, 76px); gap: 10px; justify-content: center; }
+.ziffernblock button { height: 60px; border-radius: 16px; border: 1.5px solid var(--rand); background: var(--flaeche2); color: var(--text); font-family: "Sora", system-ui, sans-serif; font-weight: 700; font-size: 26px; -webkit-user-select: none; user-select: none; }
+.ziffernblock button:active:not(:disabled) { background: var(--lila-hell); border-color: var(--lila); transform: translateY(1px); }
+.ziffernblock button:disabled { opacity: .35; }
+.ziffernblock .ok { background: var(--akzent); border-color: var(--akzent); color: var(--akzent-text); font-size: 20px; }
+.anfang-wahl { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.anfang-wahl .option { min-width: 110px; font-family: "Sora", system-ui, sans-serif; font-weight: 700; font-size: 28px; text-align: center; }
+.runter-platz { display: flex; justify-content: center; }
+.ergebnis-felder { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 14px; }
+.ergebnis-felder label { margin: 0; font-weight: 650; }
+.ergebnis-felder .zahlfeld { width: 190px; font-family: "Sora", system-ui, sans-serif; font-weight: 700; font-size: 26px; text-align: center; display: block; }
+.boss { display: inline-block; background: #FF5FA2; color: #fff; border-radius: 8px; padding: 2px 10px; font-size: 14px; vertical-align: 3px; letter-spacing: .05em; text-transform: uppercase; }
+.boss-bonus { color: var(--tipp); font-weight: 700; }
+.stempel { float: right; transform: rotate(-8deg); border: 3px solid var(--gut); color: var(--gut); border-radius: 10px; padding: 2px 12px; font-family: "Sora", system-ui, sans-serif; font-weight: 800; font-size: 18px; text-transform: uppercase; letter-spacing: .06em; animation: stempel .45s ease-out; }
+@keyframes stempel { from { transform: rotate(-8deg) scale(2.2); opacity: 0; } to { transform: rotate(-8deg) scale(1); opacity: 1; } }
+
+/* Erklärungen */
+.erklaerung { background: var(--flaeche); border-radius: 22px; padding: 20px 22px 24px; }
+.erklaerung h1 { font-size: 27px; margin-bottom: 12px; }
+.erklaerung p { font-size: 19px; }
+.erklaerung .fig { margin: 12px auto; }
+.erkl-rechnung { display: flex; flex-direction: column; align-items: center; }
+.erkl-check { margin-top: 14px; }
+.erkl-check h2 { margin-top: 0; }
+.erkl-nav { justify-content: space-between; margin-top: 18px; }
+.thema-karte.geschafft { border-color: var(--gut); }
+.hilfe .moves-liste { padding-left: 22px; }
+.hilfe .moves-liste li { margin: 8px 0; }
 
 /* Eltern */
 .eltern .karte { margin-top: 4px; }
@@ -371,6 +447,13 @@ table.plan tr.heute { background: var(--lila-hell); font-weight: 700; }
 body.ruhig *, body.ruhig *::before, body.ruhig *::after { animation: none !important; transition: none !important; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition: none !important; } }
 
+/* iPad quer: Ziffernblock neben die Rechnung, damit alles ohne Scrollen passt */
+@media (min-width: 1000px) and (orientation: landscape) {
+  .werkstatt { flex-direction: row; justify-content: center; align-items: flex-start; }
+  .werkstatt .rechnung { --zelle: min(44px, calc((min(100vw, 900px) - 380px) / var(--spalten)), calc((100vh - 330px) / var(--zeilen))); }
+  .werkstatt .anfang-wahl, .werkstatt .runter-platz { flex-direction: column; align-self: center; }
+}
+
 @media (max-width: 700px) {
   body { font-size: 17px; }
   .kacheln { grid-template-columns: repeat(3, 1fr); }
@@ -387,13 +470,18 @@ body.ruhig *, body.ruhig *::before, body.ruhig *::after { animation: none !impor
   .chips .chip.level { display: none; }
   .mission h2 { font-size: 26px; }
   .steuerung button { width: 60px; height: 58px; }
+  .spiel-sprung .steuerung button { width: 92px; }
+  .ziffernblock { grid-template-columns: repeat(3, 68px); }
+  .ziffernblock button { height: 54px; }
+  .prompt { font-size: 18px; }
 }
 
 /* Ältere iPads (Safari vor Version 14.1) kennen «gap» in Flexbox nicht: dann Abstände mit Rändern.
    aspect-ratio kam ungefähr gleichzeitig, deshalb dient es als Erkennungszeichen. */
 @supports not (aspect-ratio: 1 / 1) {
-  .start > * + *, .mitte > * + *, .liste > * + *, .tier-seite > * + *, .arcade > * + *, .hund-karte > * + *, .bloecke-info > * + * { margin-top: 12px; }
-  .kopf > * + *, .schreib > * + *, .frage-zeile > * + *, .fuss > * + *, .runde-kopf > * + *, .chips > * + *, .profil-kopf > * + *, .steuerung > * + *, .bloecke-layout > * + *, .hud > * + * { margin-left: 10px; }
+  .start > * + *, .mitte > * + *, .liste > * + *, .tier-seite > * + *, .arcade > * + *, .hund-karte > * + *, .werkstatt > * + * { margin-top: 12px; }
+  .kopf > * + *, .schreib > * + *, .frage-zeile > * + *, .fuss > * + *, .runde-kopf > * + *, .chips > * + *, .profil-kopf > * + *, .steuerung > * + *, .hud > * + *, .move > * + * { margin-left: 10px; }
+  .moves > *, .anfang-wahl > *, .leiter > *, .ergebnis-felder > *, .erkl-nav > * { margin: 0 8px 8px 0; }
   .mission > * + * { margin-left: 16px; }
   .etappen-punkte > * + *, .fortschritt > * + * { margin-left: 6px; }
   .knopfzeile > *, .reiter > *, .faecher > *, .wortbank > *, .belohnung > * { margin: 0 10px 10px 0; }

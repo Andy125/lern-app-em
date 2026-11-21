@@ -1,6 +1,6 @@
 // Spielhalle: zwei kleine Spiele als Belohnung. Oben die reine Spiellogik (läuft auch in Node, siehe
 // tools/test-spiele.mjs), unten das Zeichnen auf Canvas und die Steuerung fürs iPad.
-// «Blöcke»: fallende Blöcke stapeln, volle Reihen verschwinden. «Run»: der eigene Hund rennt, springt und sammelt Knochen.
+// «Sky Jump»: der Hund springt von Wolke zu Wolke nach oben. «Run»: der eigene Hund rennt, springt und sammelt Knochen.
 (function (root) {
   "use strict";
 
@@ -9,99 +9,82 @@
     return function () { s = (s + 0x6d2b79f5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   }
 
-  // ================= Blöcke =================
-  const FORMEN = {
-    I: { zellen: [[0, 1], [1, 1], [2, 1], [3, 1]], groesse: 4, farbe: "#5FDDBE" },
-    O: { zellen: [[1, 0], [2, 0], [1, 1], [2, 1]], groesse: 4, farbe: "#FFD166" },
-    T: { zellen: [[1, 0], [0, 1], [1, 1], [2, 1]], groesse: 3, farbe: "#B7A8FF" },
-    S: { zellen: [[1, 0], [2, 0], [0, 1], [1, 1]], groesse: 3, farbe: "#7BE07B" },
-    Z: { zellen: [[0, 0], [1, 0], [1, 1], [2, 1]], groesse: 3, farbe: "#FF6B8A" },
-    J: { zellen: [[0, 0], [0, 1], [1, 1], [2, 1]], groesse: 3, farbe: "#5AA9FF" },
-    L: { zellen: [[2, 0], [0, 1], [1, 1], [2, 1]], groesse: 3, farbe: "#F2773A" },
-  };
-  const TYPEN = Object.keys(FORMEN);
-  // Drehung im Uhrzeigersinn innerhalb des Rasters der Form; das O dreht sich nicht
-  function gedreht(typ, rot) {
-    const f = FORMEN[typ]; let z = f.zellen.map((c) => c.slice());
-    if (typ === "O") return z;
-    for (let i = 0; i < ((rot % 4) + 4) % 4; i++) z = z.map(([x, y]) => [f.groesse - 1 - y, x]);
-    return z;
-  }
-  const BLOECKE = {
-    BREITE: 10, HOEHE: 20, ZEITLIMIT: 4 * 60 * 1000,
-    PUNKTE: [0, 100, 300, 500, 800],
-    FORMEN, TYPEN, gedreht,
+  // ================= Sky Jump =================
+  // Der Hund springt von selbst, sobald er auf einer Wolke landet. Links und rechts lenkt man. Wer aus dem Bild fällt,
+  // ist raus. Weltkoordinaten: y wächst nach oben, die Kamera folgt nach oben, nie nach unten. Am Rand geht es auf der
+  // anderen Seite weiter. Jede neue Wolke auf dem Weg ist von der vorigen aus erreichbar (test-spiele.mjs prüft das).
+  const SPRUNG = {
+    BREITE: 360, HOEHE: 540, G: 1500, V: 820, FEDER: 1250, TEMPO: 300, BESCHL: 2600, BREMSE: 2000, ZEITLIMIT: 3 * 60 * 1000,
+    HUND_B: 30, // halbe Breite der Pfoten zum Landen (etwas großzügig)
+    SPANNE: 55, // so weit pendelt eine wandernde Wolke höchstens von ihrer Mitte weg
+    // Höchste Sprunghöhe: V² / 2G = 224. Die Lücke auf dem Weg ist höchstens 170.
+    schwer(h) { return Math.min(1, h / 15000); },
     neu(seed) {
-      const s = { grid: Array.from({ length: 20 }, () => Array(10).fill(null)), beutel: [], rng: zufall(seed), punkte: 0, linien: 0, level: 1, vorbei: false, zeitUm: false, zeit: 0, fallZeit: 0, teil: null, naechste: null };
-      s.naechste = BLOECKE.ziehe(s);
-      BLOECKE.spawn(s);
+      const s = { rng: zufall(seed), t: 0, x: SPRUNG.BREITE / 2, y: 0, vx: 0, vy: SPRUNG.V, blick: 1, kamera: 0, maxY: 0,
+        plattformen: [{ x: 0, y: 0, w: SPRUNG.BREITE, typ: "boden", vx: 0, weg: true }], knochen: [], knochenZahl: 0, spruenge: 0,
+        punkte: 0, vorbei: false, zeitUm: false, grund: "", obenY: 0 };
+      s.letzte = s.plattformen[0];
+      SPRUNG.erzeuge(s);
       return s;
     },
-    // 7er-Beutel: jede Form kommt in jeder Siebener-Runde genau einmal
-    ziehe(s) {
-      if (!s.beutel.length) { const b = TYPEN.slice(); for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(s.rng() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } s.beutel = b; }
-      return s.beutel.shift();
-    },
-    zellen(t) { return gedreht(t.typ, t.rot).map(([x, y]) => [t.x + x, t.y + y]); },
-    passt(s, t) {
-      return BLOECKE.zellen(t).every(([x, y]) => x >= 0 && x < 10 && y < 20 && (y < 0 || s.grid[y][x] === null));
-    },
-    spawn(s) {
-      const typ = s.naechste; s.naechste = BLOECKE.ziehe(s);
-      s.teil = { typ, rot: 0, x: 3, y: typ === "I" ? -1 : 0 };
-      if (!BLOECKE.passt(s, s.teil)) s.vorbei = true;
-    },
-    bewege(s, dx) {
-      if (s.vorbei) return false;
-      const t = Object.assign({}, s.teil, { x: s.teil.x + dx });
-      if (!BLOECKE.passt(s, t)) return false;
-      s.teil = t; return true;
-    },
-    drehe(s) {
-      if (s.vorbei) return false;
-      for (const kick of [0, -1, 1, -2, 2]) {
-        const t = Object.assign({}, s.teil, { rot: (s.teil.rot + 1) % 4, x: s.teil.x + kick });
-        if (BLOECKE.passt(s, t)) { s.teil = t; return true; }
+    luecke(h, r) { const k = SPRUNG.schwer(h); const von = 46 + 44 * k, bis = 96 + 74 * k; return von + r * (bis - von); },
+    // Flugzeit vom Absprung bis man beim Fallen wieder auf Höhe dy ist
+    flugzeit(dy) { const V = SPRUNG.V, G = SPRUNG.G; return (V + Math.sqrt(Math.max(0, V * V - 2 * G * dy))) / G; },
+    erzeuge(s) {
+      const W = SPRUNG.BREITE;
+      while (s.obenY < s.kamera + SPRUNG.HOEHE + 320) {
+        const h = s.obenY, k = SPRUNG.schwer(h);
+        const dy = SPRUNG.luecke(h, s.rng());
+        const w = Math.round(80 - 22 * k);
+        // Wandernde Wolken pendeln nur um ihre Mitte, damit der Weg erreichbar bleibt
+        const wandert = h > 1500 && s.rng() < 0.4 * k + 0.05, spanne = SPRUNG.SPANNE;
+        const dxMax = Math.max(16, Math.min(200, SPRUNG.TEMPO * (SPRUNG.flugzeit(dy) - 0.15) * 0.7) - (s.letzte.typ === "wandert" ? spanne : 0) - (wandert ? spanne : 0));
+        const vorher = s.letzte.typ === "boden" ? W / 2 : s.letzte.mitte != null ? s.letzte.mitte : s.letzte.x + s.letzte.w / 2;
+        const c = Math.max(w / 2, Math.min(W - w / 2, vorher + (s.rng() * 2 - 1) * dxMax));
+        const p = { x: c - w / 2, y: h + dy, w, mitte: c, typ: wandert ? "wandert" : "normal", vx: wandert ? (35 + 75 * k) * (s.rng() < 0.5 ? -1 : 1) : 0, feder: !wandert && h > 600 && s.rng() < 0.07, weg: true };
+        s.plattformen.push(p);
+        // Bröckel-Wolken als Falle, nie auf dem Weg
+        if (h > 900 && s.rng() < 0.2 + 0.35 * k) {
+          const bw = 66, by = h + dy * (0.35 + 0.3 * s.rng()), bx = s.rng() * (W - bw);
+          if (Math.abs(bx + bw / 2 - c) > 70) s.plattformen.push({ x: bx, y: by, w: bw, typ: "broeckel", vx: 0 });
+        }
+        if (s.rng() < 0.32) s.knochen.push({ x: c + (s.rng() * 2 - 1) * 40, y: h + dy + 50 + s.rng() * 70 });
+        s.letzte = p; s.obenY = h + dy;
       }
-      return false;
     },
-    // eine Reihe tiefer; geht es nicht weiter, wird das Teil festgesetzt
-    fallen(s, weich) {
-      if (s.vorbei) return false;
-      const t = Object.assign({}, s.teil, { y: s.teil.y + 1 });
-      if (BLOECKE.passt(s, t)) { s.teil = t; if (weich) s.punkte += 1; return true; }
-      BLOECKE.fest(s); return false;
-    },
-    zielY(s) { let y = s.teil.y; while (BLOECKE.passt(s, Object.assign({}, s.teil, { y: y + 1 }))) y++; return y; },
-    ganzRunter(s) {
-      if (s.vorbei) return 0;
-      const y = BLOECKE.zielY(s), n = y - s.teil.y;
-      s.teil.y = y; s.punkte += 2 * n; BLOECKE.fest(s);
-      return n;
-    },
-    fest(s) {
-      const farbe = FORMEN[s.teil.typ].farbe;
-      for (const [x, y] of BLOECKE.zellen(s.teil)) { if (y < 0) { s.vorbei = true; continue; } s.grid[y][x] = farbe; }
-      const voll = [];
-      s.grid.forEach((reihe, y) => { if (reihe.every((c) => c !== null)) voll.push(y); });
-      if (voll.length) {
-        s.grid = s.grid.filter((_, y) => voll.indexOf(y) < 0);
-        while (s.grid.length < 20) s.grid.unshift(Array(10).fill(null));
-        s.punkte += BLOECKE.PUNKTE[voll.length] * s.level;
-        s.linien += voll.length;
-        s.level = 1 + Math.floor(s.linien / 10);
-      }
-      s.letzteReihen = voll;
-      if (!s.vorbei) BLOECKE.spawn(s);
-    },
-    intervall(level) { return Math.max(90, 800 - (level - 1) * 75); },
-    tick(s, ms) {
+    abstandX(a, b) { const W = SPRUNG.BREITE; let d = (a - b) % W; if (d > W / 2) d -= W; if (d < -W / 2) d += W; return d; },
+    aufPlattform(s, p) { return Math.abs(SPRUNG.abstandX(s.x, p.x + p.w / 2)) <= p.w / 2 + SPRUNG.HUND_B - 12; },
+    // ein Schritt; eingabe: { richtung: -1, 0 oder 1 }
+    schritt(s, dt, eingabe) {
       if (s.vorbei) return;
-      s.zeit += ms;
-      if (s.zeit >= BLOECKE.ZEITLIMIT) { s.vorbei = true; s.zeitUm = true; return; }
-      s.fallZeit += ms;
-      const iv = BLOECKE.intervall(s.level);
-      while (s.fallZeit >= iv && !s.vorbei) { s.fallZeit -= iv; BLOECKE.fallen(s, false); }
+      const W = SPRUNG.BREITE, richtung = (eingabe && eingabe.richtung) || 0;
+      s.t += dt;
+      if (s.t * 1000 >= SPRUNG.ZEITLIMIT) { s.vorbei = true; s.zeitUm = true; s.grund = "zeit"; return; }
+      // lenken mit etwas Schwung
+      if (richtung) { const ziel = richtung * SPRUNG.TEMPO; s.vx += Math.max(-SPRUNG.BESCHL * dt, Math.min(SPRUNG.BESCHL * dt, ziel - s.vx)); s.blick = richtung; }
+      else s.vx -= Math.sign(s.vx) * Math.min(Math.abs(s.vx), SPRUNG.BREMSE * dt);
+      s.x = ((s.x + s.vx * dt) % W + W) % W;
+      for (const p of s.plattformen) if (p.typ === "wandert") {
+        p.x += p.vx * dt;
+        const links = Math.max(0, p.mitte - SPRUNG.SPANNE - p.w / 2), rechts = Math.min(W - p.w, p.mitte + SPRUNG.SPANNE - p.w / 2);
+        if (p.x < links) { p.x = links; p.vx = Math.abs(p.vx); } if (p.x > rechts) { p.x = rechts; p.vx = -Math.abs(p.vx); }
+      }
+      const y0 = s.y;
+      s.vy -= SPRUNG.G * dt; s.y += s.vy * dt;
+      if (s.vy < 0) for (const p of s.plattformen) {
+        if (p.kaputt || y0 < p.y || s.y > p.y || !SPRUNG.aufPlattform(s, p)) continue;
+        if (p.typ === "broeckel") { p.kaputt = true; continue; }
+        s.y = p.y; s.vy = p.feder ? SPRUNG.FEDER : SPRUNG.V; s.spruenge++; s.zuletzt = p; p.getroffen = s.t;
+        break;
+      }
+      for (const k of s.knochen) if (!k.weg && Math.abs(SPRUNG.abstandX(s.x, k.x)) < 30 && k.y > s.y - 6 && k.y < s.y + 46) { k.weg = true; s.knochenZahl++; }
+      s.maxY = Math.max(s.maxY, s.y);
+      s.kamera = Math.max(s.kamera, s.y - SPRUNG.HOEHE * 0.42);
+      if (s.y < s.kamera - 50) { s.vorbei = true; s.grund = "absturz"; }
+      s.plattformen = s.plattformen.filter((p) => p.y > s.kamera - 80 && !(p.kaputt && p.y < s.kamera + 40));
+      s.knochen = s.knochen.filter((k) => !k.weg && k.y > s.kamera - 40);
+      SPRUNG.erzeuge(s);
+      s.punkte = Math.floor(s.maxY / 10) + s.knochenZahl * 10;
     },
   };
 
@@ -197,36 +180,6 @@
   // ================= Zeichnen und Steuern =================
   function rundRechteck(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
 
-  function zeichneBloecke(c, s, zell, opt) {
-    const W = 10 * zell, H = 20 * zell;
-    c.clearRect(0, 0, W, H);
-    c.fillStyle = opt.feld || "#16142b"; c.fillRect(0, 0, W, H);
-    c.strokeStyle = "rgba(255,255,255,.05)"; c.lineWidth = 1;
-    for (let x = 1; x < 10; x++) { c.beginPath(); c.moveTo(x * zell + .5, 0); c.lineTo(x * zell + .5, H); c.stroke(); }
-    for (let y = 1; y < 20; y++) { c.beginPath(); c.moveTo(0, y * zell + .5); c.lineTo(W, y * zell + .5); c.stroke(); }
-    const kachel = (x, y, farbe, geist) => {
-      const p = Math.max(1, Math.round(zell * 0.08));
-      if (geist) { c.strokeStyle = farbe; c.globalAlpha = .45; c.lineWidth = 2; rundRechteck(c, x * zell + p + 1, y * zell + p + 1, zell - 2 * p - 2, zell - 2 * p - 2, zell * 0.18); c.stroke(); c.globalAlpha = 1; return; }
-      c.fillStyle = farbe; rundRechteck(c, x * zell + p, y * zell + p, zell - 2 * p, zell - 2 * p, zell * 0.18); c.fill();
-      c.fillStyle = "rgba(255,255,255,.28)"; rundRechteck(c, x * zell + p * 2, y * zell + p * 2, zell - 4 * p, zell * 0.22, zell * 0.1); c.fill();
-    };
-    s.grid.forEach((reihe, y) => reihe.forEach((f, x) => { if (f) kachel(x, y, f); }));
-    if (!s.vorbei && s.teil) {
-      const farbe = FORMEN[s.teil.typ].farbe;
-      const zy = BLOECKE.zielY(s);
-      for (const [x, y] of BLOECKE.zellen(Object.assign({}, s.teil, { y: zy }))) if (y >= 0) kachel(x, y, farbe, true);
-      for (const [x, y] of BLOECKE.zellen(s.teil)) if (y >= 0) kachel(x, y, farbe);
-    }
-  }
-  function zeichneVorschau(c, typ, gr) {
-    c.clearRect(0, 0, gr * 4, gr * 4);
-    if (!typ) return;
-    const z = gedreht(typ, 0), minX = Math.min(...z.map((p) => p[0])), maxX = Math.max(...z.map((p) => p[0])), minY = Math.min(...z.map((p) => p[1])), maxY = Math.max(...z.map((p) => p[1]));
-    const ox = (4 - (maxX - minX + 1)) / 2 - minX, oy = (4 - (maxY - minY + 1)) / 2 - minY;
-    c.fillStyle = FORMEN[typ].farbe;
-    for (const [x, y] of z) { rundRechteck(c, (x + ox) * gr + 1, (y + oy) * gr + 1, gr - 2, gr - 2, gr * 0.2); c.fill(); }
-  }
-
   // Der Hund von der Seite, im Laufen; farbe aus dem Tier (Foxred beim Labrador)
   function zeichneHund(c, x, fuss, t, s, opt) {
     const fell = opt.fell || "#b8622a", dunkel = opt.dunkel || "#94491b", hell = opt.hell || "#cf8346";
@@ -293,44 +246,81 @@
     zeichneHund(c, RUN.X, s.fuss, t, s, opt);
   }
 
+  // Sky Jump: Himmel wird mit der Höhe dunkler, bis ins All
+  function zeichneSprung(c, s, opt) {
+    const W = SPRUNG.BREITE, H = SPRUNG.HOEHE, k = Math.min(1, s.kamera / 12000);
+    const mix = (a, b) => "rgb(" + a.map((x, i) => Math.round(x + (b[i] - x) * k)).join(",") + ")";
+    const himmel = c.createLinearGradient(0, 0, 0, H);
+    himmel.addColorStop(0, mix([58, 47, 99], [8, 6, 26])); himmel.addColorStop(1, mix([110, 90, 170], [30, 22, 70]));
+    c.fillStyle = himmel; c.fillRect(0, 0, W, H);
+    const sy = (y) => H - (y - s.kamera);
+    // Sterne, langsamer als die Wolken
+    c.fillStyle = "rgba(255,255,255," + (0.35 + 0.5 * k).toFixed(2) + ")";
+    for (let i = 0; i < 46; i++) { const x = (i * 83 + 17) % W, y = (((i * 131) % (H + 40)) + s.kamera * 0.3) % (H + 40) - 20; c.fillRect(x, y, i % 4 ? 1.6 : 2.6, i % 4 ? 1.6 : 2.6); }
+    // Planet weit oben
+    if (k > 0.3) { c.globalAlpha = Math.min(1, (k - 0.3) * 2); c.fillStyle = "#FF8FB1"; c.beginPath(); c.arc(W - 70, 90, 34, 0, Math.PI * 2); c.fill(); c.strokeStyle = "#FFD166"; c.lineWidth = 4; c.beginPath(); c.ellipse(W - 70, 90, 56, 12, -0.3, 0, Math.PI * 2); c.stroke(); c.globalAlpha = 1; }
+    // Höhenmarken alle 100 m
+    c.font = "bold 12px Sora, system-ui, sans-serif"; c.fillStyle = "rgba(255,255,255,.45)"; c.strokeStyle = "rgba(255,255,255,.18)"; c.lineWidth = 1;
+    for (let m = Math.ceil(s.kamera / 1000) * 1000; m < s.kamera + H; m += 1000) { if (!m) continue; const y = sy(m); c.setLineDash([6, 6]); c.beginPath(); c.moveTo(0, y); c.lineTo(W, y); c.stroke(); c.setLineDash([]); c.fillText(m / 10 + " m", 8, y - 5); }
+    // Wolken
+    for (const p of s.plattformen) {
+      const y = sy(p.y); if (y < -20 || y > H + 20) continue;
+      if (p.typ === "boden") { c.fillStyle = opt.boden || "#4b4578"; c.fillRect(0, y, W, H - y + 20); c.fillStyle = "#5FDDBE"; c.fillRect(0, y, W, 3); continue; }
+      const farbe = p.typ === "wandert" ? "#5FDDBE" : p.typ === "broeckel" ? "#c08a4a" : "#B7A8FF";
+      c.globalAlpha = p.kaputt ? 0.35 : 1;
+      c.fillStyle = farbe; rundRechteck(c, p.x, y, p.w, 14, 7); c.fill();
+      c.fillStyle = "rgba(255,255,255,.4)"; c.fillRect(p.x + 8, y + 3, p.w - 16, 3);
+      if (p.typ === "broeckel") { c.strokeStyle = "#7a4e22"; c.lineWidth = 2; c.beginPath(); c.moveTo(p.x + p.w * 0.35, y); c.lineTo(p.x + p.w * 0.45, y + 8); c.lineTo(p.x + p.w * 0.38, y + 14); c.moveTo(p.x + p.w * 0.7, y); c.lineTo(p.x + p.w * 0.62, y + 9); c.stroke(); }
+      if (p.feder) { const fx = p.x + p.w / 2; c.strokeStyle = "#FFD166"; c.lineWidth = 3; c.beginPath(); c.moveTo(fx - 8, y); for (let i = 1; i <= 4; i++) c.lineTo(fx + (i % 2 ? 8 : -8), y - i * 4); c.stroke(); c.fillStyle = "#FFD166"; c.fillRect(fx - 11, y - 19, 22, 4); }
+      c.globalAlpha = 1;
+    }
+    // Knochen
+    c.fillStyle = "#fbf6ea";
+    for (const kn of s.knochen) {
+      const x = kn.x, y = sy(kn.y);
+      c.fillRect(x - 7, y - 2.5, 14, 5);
+      for (const [dx, dy] of [[-7, -2.5], [-7, 2.5], [7, -2.5], [7, 2.5]]) { c.beginPath(); c.arc(x + dx, y + dy, 3.2, 0, Math.PI * 2); c.fill(); }
+    }
+    // Der Hund, in Blickrichtung, am Rand doppelt (er kommt auf der anderen Seite herein)
+    const fuss = sy(s.y);
+    const hund = (x) => { c.save(); if (s.blick < 0) { c.translate(x, 0); c.scale(-1, 1); c.translate(-x, 0); } zeichneHund(c, x - 30, fuss, s.t, { amBoden: false }, opt); c.restore(); };
+    hund(s.x); if (s.x < 34) hund(s.x + W); if (s.x > W - 34) hund(s.x - W);
+  }
+
   // Startet ein Spiel in einem Container. opt: { art, seed, tier, manuell, onEnde(ergebnis), onPunkte(s) }
   function starte(box, opt) {
-    const art = opt.art;
+    const art = opt.art, SP = art === "sprung" ? SPRUNG : RUN;
     const dpr = Math.min(2, root.devicePixelRatio || 1);
-    let s = art === "bloecke" ? BLOECKE.neu(opt.seed) : RUN.neu(opt.seed);
-    let laeuft = true, pausiert = false, letzte = 0, rafId = 0, eingabe = { druck: false, halten: false };
+    let s = SP.neu(opt.seed);
+    let laeuft = true, pausiert = false, letzte = 0, rafId = 0;
+    const eingabe = { druck: false, halten: false, richtung: 0 };
+    const gehalten = { links: false, rechts: false, tippL: false, tippR: false };
+    const richtung = () => { const l = gehalten.links || gehalten.tippL, r = gehalten.rechts || gehalten.tippR; eingabe.richtung = (r ? 1 : 0) - (l ? 1 : 0); };
     const canvas = box.querySelector("canvas.spielfeld"), c = canvas.getContext("2d");
-    const vorschau = box.querySelector("canvas.vorschau"), vc = vorschau ? vorschau.getContext("2d") : null;
-    let zell = 24;
     function groesse() {
-      if (art === "bloecke") {
-        const platz = box.querySelector(".spiel-feld-platz");
-        const maxH = Math.max(240, (root.innerHeight || 800) - 330), maxW = Math.max(160, (platz ? platz.clientWidth : 300));
-        zell = Math.max(12, Math.floor(Math.min(maxH / 20, maxW / 10)));
-        canvas.width = 10 * zell * dpr; canvas.height = 20 * zell * dpr; canvas.style.width = 10 * zell + "px"; canvas.style.height = 20 * zell + "px";
-        c.setTransform(dpr, 0, 0, dpr, 0, 0);
-        if (vorschau) { vorschau.width = 4 * 18 * dpr; vorschau.height = 4 * 18 * dpr; vorschau.style.width = "72px"; vorschau.style.height = "72px"; vc.setTransform(dpr, 0, 0, dpr, 0, 0); }
-      } else {
-        const breite = Math.min(box.clientWidth || 640, 900);
-        canvas.width = breite * dpr; canvas.height = breite * (RUN.HOEHE / RUN.BREITE) * dpr;
-        canvas.style.width = breite + "px"; canvas.style.height = breite * (RUN.HOEHE / RUN.BREITE) + "px";
-        const k = (breite / RUN.BREITE) * dpr; c.setTransform(k, 0, 0, k, 0, 0);
-      }
+      let breite;
+      if (art === "sprung") {
+        const hoch = Math.max(300, (root.innerHeight || 800) - 250);
+        breite = Math.floor(Math.min(box.clientWidth || 360, 560, (hoch * SP.BREITE) / SP.HOEHE));
+      } else breite = Math.min(box.clientWidth || 640, 900);
+      const hoehe = breite * (SP.HOEHE / SP.BREITE);
+      canvas.width = Math.round(breite * dpr); canvas.height = Math.round(hoehe * dpr);
+      canvas.style.width = breite + "px"; canvas.style.height = hoehe + "px";
+      const k = (breite / SP.BREITE) * dpr; c.setTransform(k, 0, 0, k, 0, 0);
     }
     function zeichne() {
-      if (art === "bloecke") { zeichneBloecke(c, s, zell, opt); if (vc) zeichneVorschau(vc, s.naechste, 18); }
-      else zeichneRun(c, s, opt.tier || {});
+      if (art === "sprung") zeichneSprung(c, s, opt.tier || {}); else zeichneRun(c, s, opt.tier || {});
       if (opt.onPunkte) opt.onPunkte(s);
     }
     function ende() {
       if (!laeuft) return; laeuft = false; cancelAnimationFrame(rafId); aufraeumen();
-      const ergebnis = art === "bloecke" ? { punkte: s.punkte, linien: s.linien, level: s.level, zeitUm: s.zeitUm } : { punkte: s.punkte, knochen: s.knochenZahl, grund: s.grund };
+      const ergebnis = { punkte: s.punkte, knochen: s.knochenZahl, grund: s.grund, zeitUm: !!s.zeitUm, hoehe: art === "sprung" ? Math.floor(s.maxY / 10) : 0 };
       if (opt.onEnde) opt.onEnde(ergebnis);
     }
     function schritt(ms) {
       if (!laeuft || pausiert) return;
-      if (art === "bloecke") BLOECKE.tick(s, ms);
-      else { const n = Math.max(1, Math.round(ms / 16.67)); for (let i = 0; i < n && !s.vorbei; i++) { RUN.schritt(s, ms / n / 1000, eingabe); eingabe.druck = false; } }
+      const n = Math.max(1, Math.round(ms / 16.67));
+      for (let i = 0; i < n && !s.vorbei; i++) { SP.schritt(s, ms / n / 1000, eingabe); eingabe.druck = false; }
       zeichne();
       if (s.vorbei) ende();
     }
@@ -343,23 +333,19 @@
     // ---- Steuerung ----
     const weg = [];
     const an = (el, ev, fn, o) => { if (!el) return; el.addEventListener(ev, fn, o); weg.push(() => el.removeEventListener(ev, fn, o)); };
-    const aktion = (a) => {
+    const aktion = (a, los) => {
       if (!laeuft || pausiert) return;
-      if (art === "bloecke") {
-        if (a === "links") BLOECKE.bewege(s, -1); else if (a === "rechts") BLOECKE.bewege(s, 1);
-        else if (a === "drehen") BLOECKE.drehe(s); else if (a === "runter") BLOECKE.fallen(s, true); else if (a === "fallen") BLOECKE.ganzRunter(s);
-        zeichne(); if (s.vorbei) ende();
-      } else if (a === "springen") eingabe.druck = true;
+      if (a === "springen") eingabe.druck = true;
+      if (a === "links" || a === "rechts") { gehalten[a] = !los; richtung(); }
     };
-    let wiederholung = null;
-    const halteStart = (a) => { aktion(a); clearInterval(wiederholung); if (a === "links" || a === "rechts" || a === "runter") { let erst = true; wiederholung = setInterval(() => { if (erst) { erst = false; return; } aktion(a); }, 85); } };
-    const halteEnde = () => { clearInterval(wiederholung); wiederholung = null; };
+    // Knöpfe: gedrückt halten lenkt
     box.querySelectorAll("[data-spiel]").forEach((b) => {
       const a = b.getAttribute("data-spiel");
-      an(b, "touchstart", (e) => { e.preventDefault(); halteStart(a); }, { passive: false });
-      an(b, "touchend", (e) => { e.preventDefault(); halteEnde(); }, { passive: false });
-      an(b, "mousedown", (e) => { e.preventDefault(); halteStart(a); });
-      an(b, "mouseup", halteEnde); an(b, "mouseleave", halteEnde);
+      an(b, "touchstart", (e) => { e.preventDefault(); aktion(a); }, { passive: false });
+      an(b, "touchend", (e) => { e.preventDefault(); aktion(a, true); }, { passive: false });
+      an(b, "touchcancel", () => aktion(a, true));
+      an(b, "mousedown", (e) => { e.preventDefault(); aktion(a); });
+      an(b, "mouseup", () => aktion(a, true)); an(b, "mouseleave", () => aktion(a, true));
     });
     if (art === "run") {
       // Überall auf das Spielfeld tippen = springen, Finger liegen lassen = höher springen
@@ -367,23 +353,30 @@
       const los = () => { eingabe.halten = false; };
       an(canvas, "touchstart", druck, { passive: false }); an(canvas, "touchend", los); an(canvas, "mousedown", druck); an(canvas, "mouseup", los);
     } else {
-      // Wischen auf dem Spielfeld: seitlich verschieben, nach unten fallen lassen, tippen drehen
-      let sx = 0, sy = 0, schonBewegt = 0, startZeit = 0;
-      an(canvas, "touchstart", (e) => { e.preventDefault(); const p = e.touches[0]; sx = p.clientX; sy = p.clientY; schonBewegt = 0; startZeit = Date.now(); }, { passive: false });
-      an(canvas, "touchmove", (e) => { e.preventDefault(); const p = e.touches[0]; const schritte = Math.trunc((p.clientX - sx) / Math.max(18, zell)); while (schritte > schonBewegt) { aktion("rechts"); schonBewegt++; } while (schritte < schonBewegt) { aktion("links"); schonBewegt--; } }, { passive: false });
-      an(canvas, "touchend", (e) => { e.preventDefault(); const p = e.changedTouches[0]; const dy = p.clientY - sy, dx = p.clientX - sx; if (dy > 60 && Math.abs(dy) > Math.abs(dx) && Date.now() - startZeit < 400) aktion("fallen"); else if (Math.abs(dx) < 10 && Math.abs(dy) < 10) aktion("drehen"); }, { passive: false });
+      // Sky Jump: Finger auf der linken oder rechten Hälfte des Spielfelds lenkt
+      const seiten = (e) => {
+        if (e.cancelable) e.preventDefault();
+        const r = canvas.getBoundingClientRect(); gehalten.tippL = false; gehalten.tippR = false;
+        for (let i = 0; i < e.touches.length; i++) { if (e.touches[i].clientX < r.left + r.width / 2) gehalten.tippL = true; else gehalten.tippR = true; }
+        richtung();
+      };
+      an(canvas, "touchstart", seiten, { passive: false }); an(canvas, "touchmove", seiten, { passive: false }); an(canvas, "touchend", seiten, { passive: false }); an(canvas, "touchcancel", seiten);
+      let maus = false;
+      const mausSeite = (e) => { if (!maus) return; const r = canvas.getBoundingClientRect(); gehalten.tippL = e.clientX < r.left + r.width / 2; gehalten.tippR = !gehalten.tippL; richtung(); };
+      an(canvas, "mousedown", (e) => { maus = true; mausSeite(e); }); an(canvas, "mousemove", mausSeite);
+      an(root.document, "mouseup", () => { maus = false; gehalten.tippL = gehalten.tippR = false; richtung(); });
     }
+    const TASTEN = { ArrowLeft: "links", ArrowRight: "rechts", ArrowUp: "springen", " ": "springen" };
     const taste = (e) => {
-      const m = { ArrowLeft: "links", ArrowRight: "rechts", ArrowUp: art === "run" ? "springen" : "drehen", ArrowDown: "runter", " ": art === "run" ? "springen" : "fallen" }[e.key];
-      if (!m) return; e.preventDefault();
-      if (art === "run") { eingabe.druck = true; eingabe.halten = true; } else aktion(m);
+      const m = TASTEN[e.key]; if (!m) return; e.preventDefault();
+      if (art === "run") { if (m === "springen") { eingabe.druck = true; eingabe.halten = true; } } else if (m !== "springen") aktion(m);
     };
-    const tasteLos = () => { eingabe.halten = false; };
+    const tasteLos = (e) => { eingabe.halten = false; const m = TASTEN[e.key]; if (m === "links" || m === "rechts") aktion(m, true); };
     an(root.document, "keydown", taste); an(root.document, "keyup", tasteLos);
-    const sicht = () => { if (root.document.visibilityState === "hidden") pausiert = true; };
+    const sicht = () => { if (root.document.visibilityState === "hidden") { pausiert = true; gehalten.links = gehalten.rechts = gehalten.tippL = gehalten.tippR = false; richtung(); } };
     an(root.document, "visibilitychange", sicht);
     an(root, "resize", () => { groesse(); zeichne(); });
-    function aufraeumen() { halteEnde(); weg.forEach((f) => f()); weg.length = 0; }
+    function aufraeumen() { weg.forEach((f) => f()); weg.length = 0; }
 
     groesse(); zeichne();
     if (!opt.manuell) rafId = requestAnimationFrame(loop);
@@ -395,6 +388,6 @@
     };
   }
 
-  root.LN_SPIELE = { BLOECKE, RUN, starte, zufall };
+  root.LN_SPIELE = { SPRUNG, RUN, starte, zufall };
   if (typeof module !== "undefined" && module.exports) module.exports = root.LN_SPIELE;
 })(typeof window !== "undefined" ? window : globalThis);
