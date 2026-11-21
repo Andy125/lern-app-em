@@ -132,7 +132,7 @@
   // ---------- Inhalte ----------
   // Ein Fach hat Themen, ein Thema hat Karten. Aus jeder Karte entstehen ein oder mehrere Lernteile
   // (bei Bild, Paaren und Gruppen einer je Eintrag), jeder Lernteil hat einen eigenen Fortschritt.
-  const TYPEN = ["begriff", "frage", "zahl", "wahr", "paare", "gruppen", "reihe", "luecke", "bild", "vokabel"];
+  const TYPEN = ["begriff", "frage", "zahl", "wahr", "paare", "gruppen", "reihe", "luecke", "bild", "vokabel", "teilen", "detektiv", "ueberschlag", "umkehr", "kopf", "sach", "passt"];
   function fachTeile(fach) {
     if (fach.__teile) return fach.__teile;
     const teile = [];
@@ -188,6 +188,14 @@
       case "luecke": return ["luecke"];
       case "bild": return ["bild-wahl", "bild-tippen", "bild-schreiben"];
       case "vokabel": return ["en-de-wahl", "de-en-wahl", "de-en-schreiben"].concat(k.satz ? ["satz-wahl"] : []);
+      // Mathe: erst geführt in der Rechen-Werkstatt, dann ohne Hilfen, dann nur das Ergebnis (gerechnet auf Papier)
+      case "teilen": return ["teilen-werkstatt", "teilen-profi", "teilen-ergebnis"];
+      case "detektiv": return ["detektiv"];
+      case "ueberschlag": return ["ueberschlag-wahl", "plausibel"];
+      case "umkehr": return ["umkehr"];
+      case "kopf": return ["kopf"];
+      case "sach": return ["sach"];
+      case "passt": return ["passt-wahl", "passt-zahl"];
     }
     return [];
   }
@@ -206,6 +214,168 @@
       i -= 1;
     }
     return m[i];
+  }
+
+  // ---------- Mathe: schriftlich dividieren ----------
+  // Zahlen wie im Schulbuch: ab fünf Stellen mit kleinem Abstand (12 500), vierstellige ohne (4218)
+  const zahlText = (n) => { const s = String(n); return s.replace(/^-/, "").length >= 5 ? s.replace(/\B(?=(\d{3})+(?!\d))/g, " ") : s; };
+  // Die Schritte der schriftlichen Division, genau wie im Heft: Man fängt links mit der kleinsten Zahl an,
+  // in die der Divisor passt, dann für jede Stelle Teilen, Mal, Minus, Runterholen.
+  function divSchritte(a, b) {
+    const d = String(a).split("").map(Number);
+    let i = 0, teil = d[0];
+    while (teil < b && i < d.length - 1) { i++; teil = teil * 10 + d[i]; }
+    const schritte = [];
+    for (;;) {
+      const z = Math.floor(teil / b), p = z * b;
+      schritte.push({ teil, ende: i, ziffer: z, produkt: p, diff: teil - p });
+      if (i >= d.length - 1) break;
+      i++; teil = (teil - p) * 10 + d[i];
+    }
+    return { a, b, ziffern: d, schritte, quotient: Number(schritte.map((s) => s.ziffer).join("")), rest: schritte[schritte.length - 1].diff, anfang: schritte[0].ende + 1 };
+  }
+  // Reihenfolge der Eingaben: womit anfangen, dann je Stelle Ziffer, Produkt, Differenz und Runterholen
+  function divAblauf(D) {
+    const out = [{ typ: "start", wert: D.anfang }];
+    D.schritte.forEach((s, k) => {
+      out.push({ typ: "ziffer", s: k, wert: s.ziffer }, { typ: "produkt", s: k, wert: s.produkt }, { typ: "diff", s: k, wert: s.diff });
+      if (k < D.schritte.length - 1) out.push({ typ: "runter", s: k, wert: D.ziffern[s.ende + 1] });
+    });
+    out.push({ typ: "fertig" });
+    return out;
+  }
+  // Wahlmöglichkeiten für den Anfang: die ersten 1, 2, (3) Ziffern
+  const divAnfaenge = (D) => { const out = []; for (let n = 1; n <= Math.min(D.ziffern.length, String(D.b).length + 1); n++) out.push(Number(D.ziffern.slice(0, n).join(""))); return out; };
+  // Eine Eingabe in der Rechen-Werkstatt prüfen. Liefert bei Fehlern einen Hinweis, der genau diesen Fehler erklärt.
+  function divPruefe(t, pos, wert) {
+    const m = t.ablauf[pos], D = t.div, b = D.b;
+    if (!m || m.typ === "fertig") return { ok: false };
+    if (m.typ === "runter") return { ok: true };
+    const n = parseZahl(wert);
+    if (isNaN(n)) return { ok: false, leer: String(wert == null ? "" : wert).trim() === "" };
+    if (m.typ === "start") {
+      if (n === Number(D.ziffern.slice(0, D.anfang).join(""))) return { ok: true };
+      if (n < b) return { ok: false, text: `${n} ist kleiner als ${b}. Da passt die ${b} nicht hinein. Nimm noch eine Ziffer dazu.` };
+      return { ok: false, text: `So viel brauchst du nicht. Die ${b} passt schon in eine kleinere Zahl. Fang so klein wie möglich an.` };
+    }
+    if (n === m.wert) return { ok: true };
+    const s = D.schritte[m.s];
+    if (m.typ === "ziffer") {
+      if (n > 9) return { ok: false, text: "Ins Ergebnis kommt immer nur eine Ziffer. Wie oft passt die " + b + " höchstens hinein?" };
+      if (n * b > s.teil) return { ok: false, text: `Zu viel: ${n} · ${b} = ${n * b}. Das ist mehr als ${s.teil}.` };
+      return { ok: false, text: `Da passt noch mehr hinein: ${n} · ${b} = ${n * b}, dann blieben ${s.teil - n * b} übrig. Das reicht noch für einmal ${b}.` };
+    }
+    if (m.typ === "produkt") {
+      const extra = s.ziffer === 0 ? " Null mal eine Zahl ist immer 0." : s.ziffer === 1 ? " Einmal die Zahl ist die Zahl selbst." : b < 10 ? ` Zähl in ${b}er-Schritten: ${b}, ${2 * b}, ${3 * b} …` : ` Tipp: ${s.ziffer} · ${Math.floor(b / 10) * 10} + ${s.ziffer} · ${b % 10}.`;
+      return { ok: false, text: `Rechne noch mal: ${s.ziffer} · ${b}.` + extra };
+    }
+    return { ok: false, text: `Rechne noch mal: ${s.teil} − ${s.produkt}.` + (n > s.teil ? " Beim Minus wird es kleiner, nicht größer." : n >= b ? ` Der Rest muss kleiner als ${b} sein.` : "") };
+  }
+  const bereich = (x) => (Array.isArray(x) ? x : [x, x]);
+  const ohneNull = (D) => D.schritte.every((s) => s.ziffer > 0);
+  // Passt eine Division zu den Wünschen der Karte? rest/null: true = muss, false = darf nicht; anfang: "gross" oder "klein"
+  function divPasst(D, k) {
+    if (D.a < D.b || D.b < 2) return false;
+    if (k.rest === true && !D.rest) return false;
+    if (k.rest === false && D.rest) return false;
+    if (k.null === true && ohneNull(D)) return false;
+    if (k.null === false && !ohneNull(D)) return false;
+    const lb = String(D.b).length;
+    if (k.anfang === "gross" && D.anfang !== lb) return false;
+    if (k.anfang === "klein" && D.anfang !== lb + 1) return false;
+    return true;
+  }
+  // Eine passende Division aus dem Startwert erzeugen: Divisor und Quotient wählen, Dividend daraus berechnen
+  function erzeugeDivision(r, k) {
+    const [smin, smax] = bereich(k.stellen || [3, 4]), [dmin, dmax] = bereich(k.divisor || [2, 9]);
+    for (let v = 0; v < 4000; v++) {
+      const b = r.int(dmin, dmax);
+      if (b < 2 || (b % 10 === 0 && !k.zehner)) continue;
+      const n = r.int(smin, smax), amin = Math.pow(10, n - 1), amax = Math.pow(10, n) - 1;
+      const rest = k.rest === true ? r.int(1, b - 1) : k.rest === false ? 0 : (r.f() < 0.5 ? 0 : r.int(1, b - 1));
+      const qmin = Math.ceil((amin - rest) / b), qmax = Math.floor((amax - rest) / b);
+      if (qmin > qmax || qmax < 2) continue;
+      let q = r.int(Math.max(2, qmin), qmax);
+      if (k.null === true) {
+        const qs = String(q).split(""); if (qs.length < 2) continue;
+        qs[r.int(1, qs.length - 1)] = "0"; if (qs.length >= 4 && r.f() < 0.3) qs[r.int(1, qs.length - 1)] = "0";
+        q = Number(qs.join(""));
+      }
+      const D = divSchritte(q * b + rest, b);
+      if (D.a >= amin && D.a <= amax && divPasst(D, k)) return D;
+    }
+    return divSchritte(k.ersatz ? k.ersatz[0] : 84, k.ersatz ? k.ersatz[1] : 4);
+  }
+  const divText = (a, b) => zahlText(a) + " : " + zahlText(b);
+  const ergebnisText = (q, rest) => zahlText(q) + (rest ? " Rest " + rest : "");
+  // Detektiv: eine durchgerechnete Division mit genau einem typischen Fehler. Alles nach dem Fehler ist folgerichtig
+  // weitergerechnet, so wie ein Kind weiterrechnen würde. Zeilen: "q" Ergebnis, "p0" erstes Produkt, "d0" erste Differenz …
+  function erzeugeDetektiv(r, k) {
+    const arten = k.fehler || ["null", "minus", "mal"];
+    for (let v = 0; v < 400; v++) {
+      const art = arten[Math.floor(r.f() * arten.length)];
+      const D = erzeugeDivision(r, Object.assign({}, k, { null: art === "null" ? true : k.null, rest: k.rest }));
+      if (D.schritte.length < 2) continue;
+      const S = D.schritte.map((s) => Object.assign({}, s));
+      let zeile = "", text = "", richtig = "";
+      if (art === "null") {
+        // Die Ziffern des Ergebnisses gehören zu den Schritten: Ziffer j ist der Schritt j
+        const qs = String(D.quotient), j = qs.indexOf("0", 1); if (j < 0) continue;
+        richtig = ergebnisText(D.quotient, D.rest);
+        text = `Im Ergebnis fehlt eine 0. Als die ${D.b} nicht in die ${D.schritte[j].teil} gepasst hat, gehört eine 0 ins Ergebnis. Richtig ist ${richtig}.`;
+        return { D, schritte: S, quotientText: qs.slice(0, j) + qs.slice(j + 1), rest: D.rest, zeile: "q", text, art, richtig };
+      }
+      // Fehlerstelle wählen, dann folgerichtig weiterrechnen
+      const kandidaten = [];
+      S.forEach((s, i) => {
+        if (art === "minus") for (const e of [-1, 1]) { const d2 = s.diff + e; if (d2 >= 0 && d2 < D.b) kandidaten.push([i, e]); }
+        if (art === "mal" && s.ziffer >= 2) for (const e of [-2, -1, 1, 2]) { const d2 = s.diff - e; if (d2 >= 0 && d2 < D.b) kandidaten.push([i, e]); }
+      });
+      if (!kandidaten.length) continue;
+      const [i, e] = kandidaten[Math.floor(r.f() * kandidaten.length)];
+      const s = S[i];
+      if (art === "minus") { s.diff += e; zeile = "d" + i; text = `Hier wurde falsch abgezogen: ${s.teil} − ${s.produkt} = ${s.teil - s.produkt}, nicht ${s.diff}.`; }
+      else { s.produkt += e; s.diff = s.teil - s.produkt; zeile = "p" + i; text = `Hier stimmt das Malnehmen nicht: ${s.ziffer} · ${D.b} = ${s.ziffer * D.b}, nicht ${s.produkt}.`; }
+      for (let j = i + 1; j < S.length; j++) {
+        const t = S[j]; t.teil = S[j - 1].diff * 10 + D.ziffern[t.ende];
+        t.ziffer = Math.floor(t.teil / D.b); t.produkt = t.ziffer * D.b; t.diff = t.teil - t.produkt;
+      }
+      const qs = S.map((x) => x.ziffer).join("");
+      richtig = ergebnisText(D.quotient, D.rest);
+      const folge = qs === String(D.quotient) ? "Deshalb stimmt am Ende der Rest nicht." : "Danach ist alles folgerichtig weitergerechnet, deshalb stimmt auch das Ergebnis nicht.";
+      return { D, schritte: S, quotientText: qs, rest: S[S.length - 1].diff, zeile, text: text + " " + folge + ` Richtig wäre ${richtig}.`, art, richtig };
+    }
+    return null;
+  }
+  // Überschlag: Dividend in der Nähe einer «schönen» Zahl, damit man gut runden kann
+  // Bei zweistelligem Divisor wird auch er gerundet (39 ≈ 40), sonst bleibt er (4 218 : 6 ≈ 4 200 : 6).
+  function erzeugeUeberschlag(r, k) {
+    const [smin, smax] = bereich(k.stellen || [3, 4]), [dmin, dmax] = bereich(k.divisor || [2, 9]);
+    for (let v = 0; v < 3000; v++) {
+      const b = r.int(dmin, dmax); if (b % 10 === 0) continue;
+      const bg = b < 10 ? b : Math.round(b / 10) * 10;
+      const n = r.int(smin, smax);
+      const m = r.int(1, 9), e = Math.max(1, n - String(m * bg).length);
+      const qn = m * Math.pow(10, e), N = qn * bg;
+      if (String(N).length !== n) continue;
+      const q = Math.round((N * (1 + (r.f() * 2 - 1) * 0.05)) / b); if (q === qn) continue;
+      const a = q * b; if (a === N || String(a).length !== n || Math.abs(a - N) > N * 0.08 || q < qn * 0.7 || q > qn * 1.4) continue;
+      return { a, b, bg, q, qn, N };
+    }
+    return { a: 4218, b: 6, bg: 6, q: 703, qn: 700, N: 4200 };
+  }
+  const ueberschlagText = (U) => `${zahlText(U.a)} ist ungefähr ${zahlText(U.N)}` + (U.bg !== U.b ? `, ${U.b} ist ungefähr ${U.bg}` : "") + `. ${zahlText(U.N)} : ${U.bg} = ${zahlText(U.qn)}.`;
+  function erzeugeBereich(r, k, feldA, feldB, rest) {
+    const [amin, amax] = bereich(feldA), [bmin, bmax] = bereich(feldB);
+    for (let v = 0; v < 2000; v++) {
+      const b = r.int(bmin, bmax);
+      const rr = rest === true ? r.int(1, b - 1) : rest === false ? 0 : (r.f() < 0.5 ? 0 : r.int(1, b - 1));
+      const qmin = Math.ceil((amin - rr) / b), qmax = Math.floor((amax - rr) / b);
+      if (qmin > qmax || qmax < 1) continue;
+      const q = r.int(Math.max(1, qmin), qmax);
+      return { a: q * b + rr, b, q, rest: rr };
+    }
+    return { a: 84, b: 4, q: 21, rest: 0 };
   }
 
   // ---------- Aufgaben erzeugen ----------
@@ -357,9 +527,100 @@
         t.erklaerung = t.erklaerung || String(k.satz).replace(/[{}]/g, "") + " (" + k.en + " = " + k.de + ")";
         break;
       }
+      // ----- Mathe -----
+      case "teilen-werkstatt": case "teilen-profi": case "teilen-ergebnis": {
+        const D = erzeugeDivision(r, k);
+        const nurErgebnis = modus === "teilen-ergebnis";
+        Object.assign(t, {
+          art: nurErgebnis ? "ergebnis" : "division", stufe: modus === "teilen-werkstatt" ? 0 : 1,
+          frage: nurErgebnis ? "Rechne auf einem Zettel, wie in der Arbeit. Wie heißt das Ergebnis?" : modus === "teilen-werkstatt" ? "Rechne Schritt für Schritt." : "Profi-Modus: Rechne ohne Hilfen.",
+          text: divText(D.a, D.b), div: D, ablauf: nurErgebnis ? null : divAblauf(D), anfaenge: divAnfaenge(D),
+          loesung: { q: D.quotient, r: D.rest }, boss: !!k.boss,
+        });
+        t.erklaerung = divText(D.a, D.b) + " = " + ergebnisText(D.quotient, D.rest) + ". Probe: " + zahlText(D.quotient) + " · " + D.b + (D.rest ? " + " + D.rest : "") + " = " + zahlText(D.a) + "." + (k.erklaerung ? " " + k.erklaerung : "");
+        break;
+      }
+      case "detektiv": {
+        const X = erzeugeDetektiv(r, k) || erzeugeDetektiv(R(1), { stellen: 4, divisor: [6, 6], fehler: ["null"] });
+        const zeilen = ["q"]; X.schritte.forEach((s, i) => zeilen.push("p" + i, "d" + i));
+        Object.assign(t, {
+          art: "detektiv", frage: "Detektiv-Fall: In dieser Rechnung steckt genau ein Fehler. Tippe auf die Zeile, in der er passiert ist.",
+          layout: { ziffern: X.D.ziffern, b: X.D.b, schritte: X.schritte, quotientText: X.quotientText, rest: X.rest }, zeilen, loesung: X.zeile, fehlerArt: X.art, richtig: X.richtig,
+        });
+        t.erklaerung = X.text;
+        break;
+      }
+      case "ueberschlag-wahl": {
+        const U = erzeugeUeberschlag(r, k);
+        const opts = [U.qn / 10, U.qn, U.qn * 10, U.qn * 100].filter((x) => x >= 1 && x === Math.floor(x));
+        Object.assign(t, { art: "wahl", frage: "Überschlag: Ungefähr wie groß ist das Ergebnis?", text: divText(U.a, U.b), optionen: r.shuffle(opts.map(zahlText)), loesung: zahlText(U.qn) });
+        t.erklaerung = ueberschlagText(U) + ` Genau sind es ${zahlText(U.q)}.`;
+        t.tipp = t.tipp || (U.bg !== U.b ? `Runde ${U.b} auf ${U.bg} und ${zahlText(U.a)} auf eine Zahl, die gut durch ${U.bg} geht.` : `Runde ${zahlText(U.a)} auf eine Zahl, die gut durch ${U.b} geht.`);
+        break;
+      }
+      case "plausibel": {
+        const U = erzeugeUeberschlag(r, k), stimmt = r.f() < 0.5;
+        let gezeigt = U.q;
+        if (!stimmt) {
+          const qs = String(U.q), j = qs.indexOf("0", 1);
+          gezeigt = j > 0 && r.f() < 0.7 ? Number(qs.slice(0, j) + qs.slice(j + 1)) : r.f() < 0.5 ? U.q * 10 : Math.round(U.q / 10);
+        }
+        Object.assign(t, { art: "wahr", frage: "Kann das stimmen? Mach einen Überschlag.", text: divText(U.a, U.b) + " = " + zahlText(gezeigt), loesung: stimmt });
+        t.erklaerung = "Überschlag: " + ueberschlagText(U) + " " + (stimmt ? `${zahlText(U.q)} passt dazu, das Ergebnis stimmt.` : `Das Ergebnis muss also ungefähr ${zahlText(U.qn)} sein. ${zahlText(gezeigt)} ist viel zu ${gezeigt < U.q ? "klein" : "groß"}. Richtig ist ${zahlText(U.q)}.`);
+        t.tipp = t.tipp || `Runde so, dass du im Kopf teilen kannst. Wie groß ist das Ergebnis ungefähr?`;
+        break;
+      }
+      case "umkehr": {
+        const [q1, q2] = bereich(k.stellen || [2, 3]), [d1, d2] = bereich(k.divisor || [3, 9]);
+        const b = r.int(d1, d2), q = r.int(Math.pow(10, q1 - 1) + 1, Math.pow(10, q2) - 1), rest = k.rest ? r.int(1, b - 1) : 0;
+        Object.assign(t, { art: "zahl", frage: "Welche Zahl fehlt?", text: "☐ : " + b + " = " + ergebnisText(q, rest), loesung: q * b + rest, einheit: "", toleranz: 0 });
+        t.erklaerung = `Rechne rückwärts, wie bei der Probe: ${zahlText(q)} · ${b} = ${zahlText(q * b)}` + (rest ? `, dazu kommt der Rest: ${zahlText(q * b)} + ${rest} = ${zahlText(q * b + rest)}.` : ".");
+        t.tipp = t.tipp || `Teilen und Malnehmen gehören zusammen. Was ergibt ${zahlText(q)} · ${b}?`;
+        break;
+      }
+      case "kopf": {
+        const form = k.form || "einmaleins";
+        let a, b, q, erkl;
+        if (form === "nullen") {
+          b = r.int(2, 9); const m = r.int(2, 9), e = r.int(1, 2); q = m * Math.pow(10, e); a = q * b;
+          erkl = `Rechne erst ${m * b} : ${b} = ${m}. Dann hängst du ${e === 1 ? "die Null" : "die zwei Nullen"} wieder an: ${zahlText(q)}.`;
+        } else if (form === "zehner") {
+          b = r.int(2, 9) * 10; a = r.int(2, 9) * b * (r.f() < 0.4 ? 10 : 1); q = a / b;
+          erkl = `Streiche bei beiden Zahlen eine Null: ${zahlText(a / 10)} : ${b / 10} = ${zahlText(q)}.`;
+        } else {
+          b = r.int(2, 9); q = r.int(2, 10); a = q * b;
+          erkl = `${q} · ${b} = ${a}, also ist ${a} : ${b} = ${q}.`;
+        }
+        Object.assign(t, { art: "zahl", frage: "Kopfrechnen: Wie viel ist das?", text: divText(a, b) + " = ?", loesung: q, einheit: "", toleranz: 0 });
+        t.erklaerung = erkl;
+        t.tipp = t.tipp || (form === "einmaleins" ? `Welche Zahl mal ${b} ergibt ${a}?` : form === "nullen" ? "Lass die Nullen erst weg und häng sie am Ende wieder an." : "Bei beiden Zahlen darfst du gleich viele Nullen streichen.");
+        break;
+      }
+      case "sach": {
+        const X = erzeugeBereich(r, k, k.a, k.b, k.antwort === "q" ? k.rest : true);
+        const loesung = k.antwort === "r" ? X.rest : k.antwort === "auf" ? X.q + 1 : X.q;
+        const text = String(k.text).replace(/\{a\}/g, zahlText(X.a)).replace(/\{b\}/g, zahlText(X.b));
+        Object.assign(t, { art: "zahl", frage: k.frage, text, loesung, einheit: k.einheit || "", toleranz: 0 });
+        t.erklaerung = `${divText(X.a, X.b)} = ${ergebnisText(X.q, X.rest)}.` + (k.antwort === "r" ? ` Übrig bleiben ${X.rest}.` : k.antwort === "auf" ? ` Für den Rest brauchst du noch eins mehr: ${zahlText(X.q)} + 1 = ${zahlText(X.q + 1)}.` : X.rest ? ` Gefragt sind nur die vollen, also ${zahlText(X.q)}.` : "") + (k.erklaerung ? " " + k.erklaerung : "");
+        t.tipp = t.tipp || "Welche Zahl wird geteilt, und durch welche? Schreib die Rechnung zuerst auf.";
+        break;
+      }
+      // Der knifflige Teil beim zweistelligen Divisor: Wie oft passt er hinein?
+      case "passt-wahl": case "passt-zahl": {
+        const [d1, d2] = bereich(k.divisor || [11, 49]);
+        const b = r.int(d1, d2), z = r.int(1, 9), zahl = z * b + r.int(0, b - 1);
+        const von = Math.max(0, Math.min(z - 1, 7)), opts = [von, von + 1, von + 2].map(String);
+        Object.assign(t, { frage: `Wie oft passt die ${b} in ${zahl}?`, text: "", loesung: modus === "passt-wahl" ? String(z) : z });
+        if (modus === "passt-wahl") Object.assign(t, { art: "wahl", optionen: opts });
+        else Object.assign(t, { art: "zahl", einheit: "mal", toleranz: 0 });
+        t.erklaerung = `${z} · ${b} = ${z * b} passt in ${zahl}` + (z < 9 ? `, aber ${z + 1} · ${b} = ${(z + 1) * b} ist zu viel` : "") + `. Also ${z}-mal, und ${zahl - z * b} bleiben übrig.`;
+        t.tipp = t.tipp || `Runde ${b} auf ${Math.round(b / 10) * 10} und schätze. Dann prüfe mit Malnehmen.`;
+        break;
+      }
       default: return null;
     }
     if (!t.tipp) t.tipp = standardTipp(t);
+    if (["teilen", "detektiv", "ueberschlag", "umkehr", "kopf", "sach", "passt"].indexOf(k.typ) >= 0) t.neueZahlen = true; // jede Wiederholung mit neuen Zahlen
     return t;
   }
   function standardTipp(t) {
@@ -372,6 +633,9 @@
       case "mehr": return "Es sind mehrere richtig. Prüfe jedes Kärtchen einzeln.";
       case "tippen": return "Schau dir das Bild in Ruhe an. Wo könnte es sein?";
       case "wahr": return "Lies den Satz noch einmal genau, Wort für Wort.";
+      case "division": return "Denk an die vier Moves: Teilen, Mal, Minus, Runter. Die Einmaleins-Leiter hilft beim Teilen.";
+      case "ergebnis": return "Mach zuerst einen Überschlag. Dann rechne Schritt für Schritt: Teilen, Mal, Minus, Runter.";
+      case "detektiv": return "Prüfe jede Zeile von oben: Stimmt das Mal? Stimmt das Minus? Fehlt im Ergebnis eine 0?";
       default: return "Lies die Aufgabe noch einmal in Ruhe.";
     }
   }
@@ -396,6 +660,22 @@
       }
       case "paare": { const m = a || {}; const falsch = t.links.filter((l) => m[l] !== t.loesung[l]); return { ok: !falsch.length, falsch }; }
       case "luecke": { const arr = Array.isArray(a) ? a : []; const richtig = t.loesung.map((w, i) => arr[i] === w); return { ok: richtig.every(Boolean), richtig }; }
+      // Ergebnis einer Division: Quotient und Rest (ein leerer Rest heißt 0)
+      case "division": case "ergebnis": {
+        const o = a || {};
+        const qs = String(o.q == null ? "" : o.q).trim(), rs = String(o.r == null ? "" : o.r).trim();
+        if (!qs) return { ok: false, leer: true };
+        const q = parseZahl(qs), rr = rs === "" ? 0 : parseZahl(rs);
+        if (isNaN(q) || isNaN(rr)) return { ok: false };
+        if (q === t.loesung.q && rr === t.loesung.r) return { ok: true };
+        const L0 = String(t.loesung.q);
+        let hinweis = "";
+        if (q === t.loesung.q) hinweis = t.loesung.r ? "Das Ergebnis stimmt, aber schau noch mal auf den Rest." : "Das Ergebnis stimmt, aber hier bleibt kein Rest übrig.";
+        else if (String(q).length < L0.length && String(q).replace(/0/g, "") === L0.replace(/0/g, "")) hinweis = "Mach einen Überschlag: Dein Ergebnis ist viel zu klein. Hast du eine 0 vergessen?";
+        else if (q * 10 <= t.loesung.q || q >= t.loesung.q * 10) hinweis = "Mach einen Überschlag: Von der Größe her kann das nicht stimmen.";
+        return { ok: false, hinweis };
+      }
+      case "detektiv": return { ok: a === t.loesung, hinweis: a !== t.loesung && a === "q" ? "Das Ergebnis ist zwar falsch, aber der Fehler passiert schon weiter oben. Geh die Zeilen von oben durch." : "" };
     }
     return { ok: false };
   }
@@ -417,10 +697,11 @@
       tier: null, // { art, name }
       hund: "", // Name des echten Hundes zu Hause, nur für die Warum-Texte
       auftraege: {}, // auftragId -> Datum, an dem er geschafft wurde
+      gesehen: {}, // themaId -> Datum, an dem die Erklärung mit dem Check geschafft wurde
       muenzen: 0,
       punkte: 0, // XP
       tokens: 0, // Spiel-Tokens für die Spielhalle
-      spiele: { run: { best: 0, runden: 0 }, bloecke: { best: 0, runden: 0 } },
+      spiele: { run: { best: 0, runden: 0 }, sprung: { best: 0, runden: 0 }, bloecke: { best: 0, runden: 0 } }, // bloecke: altes Spiel, bleibt für alte Stände
       theme: "nacht",
       gefuettert: 0,
       besitz: [], // gekaufte Dinge (Zubehör und Zimmer)
@@ -447,10 +728,11 @@
     if (istObj(raw.tier) && typeof raw.tier.art === "string") s.tier = { art: raw.tier.art, name: typeof raw.tier.name === "string" ? raw.tier.name.slice(0, 30) : "" };
     if (typeof raw.hund === "string") s.hund = raw.hund.slice(0, 30);
     if (istObj(raw.auftraege)) for (const id of Object.keys(raw.auftraege)) if (gueltigesDatum(raw.auftraege[id])) s.auftraege[id] = raw.auftraege[id];
+    if (istObj(raw.gesehen)) for (const id of Object.keys(raw.gesehen)) if (gueltigesDatum(raw.gesehen[id])) s.gesehen[id] = raw.gesehen[id];
     s.muenzen = Math.floor(zahl(raw.muenzen, 0, 0));
     s.punkte = Math.floor(zahl(raw.punkte, 0, 0));
     s.tokens = Math.floor(zahl(raw.tokens, 0, 0, 99));
-    if (istObj(raw.spiele)) for (const a of ["run", "bloecke"]) if (istObj(raw.spiele[a])) s.spiele[a] = { best: Math.floor(zahl(raw.spiele[a].best, 0, 0)), runden: Math.floor(zahl(raw.spiele[a].runden, 0, 0)) };
+    if (istObj(raw.spiele)) for (const a of ["run", "sprung", "bloecke"]) if (istObj(raw.spiele[a])) s.spiele[a] = { best: Math.floor(zahl(raw.spiele[a].best, 0, 0)), runden: Math.floor(zahl(raw.spiele[a].runden, 0, 0)) };
     if (typeof raw.theme === "string" && THEMES.some((t) => t.id === raw.theme)) s.theme = raw.theme;
     s.gefuettert = Math.floor(zahl(raw.gefuettert, 0, 0));
     if (Array.isArray(raw.besitz)) s.besitz = [...new Set(raw.besitz.filter((x) => typeof x === "string"))];
@@ -570,7 +852,8 @@
       const liste = proThema[i % themen.length]; if (!liste.length) continue;
       const t = liste.shift(); liste.push(t);
       if (out.some((o) => o.teil === t.id) && out.length < fachTeile(fach).filter((x) => themen.includes(x.thema)).length) continue;
-      const m = modi(t.karte); const modus = m[Math.min(m.length - 1, 1 + (r.f() < 0.4 ? 1 : 0))];
+      const m = modi(t.karte); let modus = m[Math.min(m.length - 1, 1 + (r.f() < 0.4 ? 1 : 0))];
+      if (t.karte.typ === "teilen") modus = "teilen-ergebnis"; // in der Probe wie in der Arbeit: auf Papier rechnen
       out.push({ teil: t.id, modus, seed: r.seed() });
     }
     return out;
@@ -718,11 +1001,19 @@
   const stufe = (punkte) => { let i = 0; STUFEN.forEach((x, j) => { if (punkte >= x.ab) i = j; }); return i; };
   // Belohnungen: Münzen nur für Richtiges auf Anhieb, Tokens nur für gute Etappen (mindestens 80 % auf Anhieb)
   const LOHN = { richtig: 1, spaeter: 0, combo: 5, comboBonus: 1, etappe: 2, mission: 3, probe: 3, auftrag: 5,
-    punkteRichtig: 10, punkteSpaeter: 3, punkteEtappe: 10, punkteMission: 20, punkteAuftrag: 30, tokenQuote: 0.8 };
+    punkteRichtig: 10, punkteSpaeter: 3, punkteEtappe: 10, punkteMission: 20, punkteAuftrag: 30, tokenQuote: 0.8,
+    punkteErklaerung: 15, bossMuenzen: 2, punkteBoss: 15 };
   // Mitmach-Auftrag erledigt: einmal Münzen, danach nur noch Freude
   function auftragErledigt(s, id, heute) {
     if (s.auftraege[id]) return false;
     s.auftraege[id] = heute; s.muenzen += LOHN.auftrag; s.punkte += LOHN.punkteAuftrag;
+    return true;
+  }
+
+  // Erklärung bis zum Check geschafft: einmal XP je Thema
+  function erklaerungGeschafft(s, id, heute) {
+    if (s.gesehen[id]) return false;
+    s.gesehen[id] = heute; s.punkte += LOHN.punkteErklaerung;
     return true;
   }
 
@@ -733,7 +1024,8 @@
     defaults, migrate, record, teilStand, bereitschaft, wackelt, sterneFuer,
     buildEtappe, buildProbe, planListe, planTag, etappenFuer,
     levelStart, level, rang, RAENGE, THEMES, tokenNoetig, spielStart, spielEnde,
-    SHOP, laden, shopDing, kaufe, varianten, teileVon, ueberlappt, STUFEN, stufe, LOHN,
+    SHOP, laden, shopDing, kaufe, varianten, teileVon, ueberlappt, STUFEN, stufe, LOHN, erklaerungGeschafft,
+    zahlText, divSchritte, divAblauf, divAnfaenge, divPruefe, divPasst, erzeugeDivision, erzeugeDetektiv, erzeugeUeberschlag, divText, ergebnisText,
   };
   root.LN = L;
   if (typeof module !== "undefined" && module.exports) module.exports = L;

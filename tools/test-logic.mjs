@@ -54,6 +54,16 @@ for (const fach of FAECHER) {
         ok(k.en && k.de, `${K}: Vokabel mit en und de`);
         if (k.satz) ok((String(k.satz).match(/\{[^}]+\}/g) || []).length === 1, `${K}: Satz mit genau einer Lücke`);
       }
+      // Mathe: erzeugte Aufgaben brauchen einen Titel und gültige Bereiche
+      if (["teilen", "detektiv", "ueberschlag", "umkehr", "kopf", "sach", "passt"].includes(k.typ)) ok(typeof k.titel === "string" && k.titel.length > 3, `${K}: Titel für die Übersicht`);
+      if (k.typ === "teilen" || k.typ === "detektiv" || k.typ === "ueberschlag") {
+        const [s1, s2] = [].concat(k.stellen), [d1, d2] = [].concat(k.divisor);
+        ok(s1 >= 3 && (s2 || s1) <= 6 && d1 >= 2 && (d2 || d1) <= 99, `${K}: Stellen und Divisor im Rahmen (Divisor höchstens zweistellig)`);
+      }
+      if (k.typ === "sach") {
+        ok(k.text && /\{a\}/.test(k.text) && /\{b\}/.test(k.text) && k.frage && ["q", "r", "auf"].includes(k.antwort), `${K}: Sachaufgabe mit {a}, {b}, Frage und Antwortart`);
+        if (k.antwort !== "q") ok(k.rest === true, `${K}: «${k.antwort}» braucht einen Rest`);
+      }
       if (k.typ === "bild") {
         ok(k.svg && k.viewBox && k.marken.length >= 3, `${K}: Bild mit mind. 3 Marken`);
         ok(new Set(k.marken.map((m) => m.nr)).size === k.marken.length, `${K}: Nummern eindeutig`);
@@ -71,6 +81,137 @@ for (const fach of FAECHER) {
   ok(vok.length === 0 || vok.length >= 4, `${F}: 0 oder mind. 4 Vokabeln (für Auswahl)`);
   const begriffKarten = fach.themen.flatMap((t) => t.karten).filter((k) => k.typ === "begriff");
   ok(begriffKarten.length === 0 || begriffKarten.length >= 3, `${F}: 0 oder mind. 3 Begriffe (für Auswahl)`);
+  // Erklär-Folien: Titel, Inhalt, Beispielrechnungen und Check
+  for (const th of fach.themen) for (const fo of th.erklaerung || []) {
+    const E = `${F}/${th.id}/Erklärung «${fo.titel}»`;
+    ok(fo.titel && (fo.text || fo.bild || fo.rechnung || fo.check), `${E}: Titel und Inhalt`);
+    if (fo.bild) ok(/^<svg viewBox="0 0 640 \d+"/.test(fo.bild) && !/NaN|undefined/.test(fo.bild), `${E}: Bild ist ein gültiges SVG`);
+    if (fo.rechnung) { const D = L.divSchritte(fo.rechnung.a, fo.rechnung.b); ok(fo.rechnung.bis === "alles" || (fo.rechnung.bis >= 0 && fo.rechnung.bis < L.divAblauf(D).length), `${E}: Beispielrechnung bis zu einem gültigen Schritt`); }
+    if (fo.check) ok(fo.check.frage && fo.check.antwort && fo.check.falsch.length >= 2 && !fo.check.falsch.includes(fo.check.antwort), `${E}: Check mit einer richtigen und mind. zwei falschen Antworten`);
+    ok(!/[\u2013\u2014]/.test(JSON.stringify(fo).replace(/<svg[^]*?<\/svg>/g, "")), `${E}: keine langen Gedankenstriche`);
+  }
+  for (const th of fach.themen) if (th.erklaerung) ok(th.erklaerung.some((fo) => fo.check), `${F}/${th.id}: Erklärung endet mit einem Check`);
+}
+
+// ---------- Mathe: schriftlich dividieren, unabhängig nachgerechnet ----------
+// Schriftliche Division als Zeichenkette, ohne den Code der App
+function langDivision(a, b) {
+  const d = String(a); let i = 0, teil = Number(d[0]);
+  while (teil < b && i < d.length - 1) { i++; teil = teil * 10 + Number(d[i]); }
+  const out = [];
+  for (;;) { const z = Math.floor(teil / b); out.push([teil, z, z * b, teil - z * b]); if (i === d.length - 1) break; i++; teil = (teil - z * b) * 10 + Number(d[i]); }
+  return out;
+}
+const zahlAus = (txt) => Number(String(txt).replace(/[\s\u00a0]/g, ""));
+{
+  ok(JSON.stringify(langDivision(4218, 6)) === "[[42,7,42,0],[1,0,0,1],[18,3,18,0]]", "Beispiel 4218 : 6 von Hand");
+  for (const [a, b] of [[4218, 6], [157, 4], [989, 43], [864, 12], [100000, 7], [12, 5], [7007, 7], [98765, 99]]) {
+    const D = L.divSchritte(a, b);
+    ok(D.quotient === Math.floor(a / b) && D.rest === a % b, `${a} : ${b} = ${Math.floor(a / b)} Rest ${a % b}`);
+    ok(JSON.stringify(D.schritte.map((s) => [s.teil, s.ziffer, s.produkt, s.diff])) === JSON.stringify(langDivision(a, b)), `${a} : ${b}: Schritte wie von Hand`);
+    const ab = L.divAblauf(D);
+    ok(ab.length === 1 + 4 * D.schritte.length, `${a} : ${b}: Start, je Schritt Teilen, Mal, Minus, Runter (außer am Ende), Fertig`);
+  }
+  ok(L.zahlText(4218) === "4218" && L.zahlText(12500) === "12\u00a0500" && L.zahlText(1234567) === "1\u00a0234\u00a0567", "Zahlen wie im Schulbuch");
+}
+function pruefeMathe(fach, teil, t, T) {
+  const k = teil.karte;
+  const bereich = (x, v) => { const [u, o] = [].concat(x); return v >= u && v <= (o == null ? u : o); };
+  if (t.art === "division" || t.art === "ergebnis") {
+    const [a, b] = t.text.split(" : ").map(zahlAus);
+    ok(t.loesung.q === Math.floor(a / b) && t.loesung.r === a % b, `${T}: Ergebnis stimmt (${a} : ${b})`);
+    ok(bereich(k.stellen, String(a).length) && bereich(k.divisor, b) && b % 10 !== 0, `${T}: Zahlen passen zur Karte (${a} : ${b})`);
+    const hand = langDivision(a, b), nullDrin = hand.some((x) => x[1] === 0);
+    if (k.rest === true) ok(a % b > 0, `${T}: mit Rest`);
+    if (k.rest === false) ok(a % b === 0, `${T}: ohne Rest`);
+    if (k.null === true) ok(nullDrin, `${T}: mit 0 im Ergebnis`);
+    if (k.null === false) ok(!nullDrin, `${T}: ohne 0 im Ergebnis`);
+    const anfang = String(hand[0][0]).length;
+    if (k.anfang === "gross") ok(anfang === String(b).length, `${T}: Anfang so lang wie der Divisor`);
+    if (k.anfang === "klein") ok(anfang === String(b).length + 1, `${T}: Anfang eine Stelle länger`);
+    ok(L.check(t, { q: String(a / b | 0), r: a % b ? String(a % b) : "" }).ok, `${T}: richtige Antwort angenommen`);
+    ok(!L.check(t, { q: String((a / b | 0) + 1), r: "" }).ok && !L.check(t, { q: "", r: "" }).ok, `${T}: falsche oder leere Antwort abgelehnt`);
+    if (a % b) ok(!L.check(t, { q: String(a / b | 0), r: "" }).ok, `${T}: ohne Rest abgelehnt`);
+    else ok(L.check(t, { q: String(a / b | 0), r: "0" }).ok, `${T}: Rest 0 gilt wie leer`);
+    if (t.art === "division") {
+      // Werkstatt einmal ganz durchspielen: jede richtige Eingabe passt, jede falsche wird abgelehnt
+      ok(t.ablauf.length === 1 + 4 * hand.length, `${T}: Ablauf hat alle Schritte`);
+      let alles = true, abgelehnt = true;
+      t.ablauf.forEach((m, pos) => {
+        if (m.typ === "fertig") return;
+        const richtig = m.typ === "start" ? String(hand[0][0]) : m.typ === "runter" ? "runter" : String(m.wert);
+        if (!L.divPruefe(t, pos, richtig).ok) alles = false;
+        if (m.typ === "ziffer" || m.typ === "produkt" || m.typ === "diff") { const f = L.divPruefe(t, pos, String(m.wert + 1)); if (f.ok || !f.text) abgelehnt = false; }
+        if (m.typ === "ziffer") { const h = hand[m.s]; if (h[1] !== m.wert) alles = false; }
+      });
+      ok(alles, `${T}: richtige Eingaben werden angenommen`);
+      ok(abgelehnt, `${T}: falsche Eingaben werden mit Hinweis abgelehnt`);
+      ok(t.anfaenge.includes(hand[0][0]) && t.anfaenge.length >= 2, `${T}: Anfang ist unter den Wahlmöglichkeiten`);
+    }
+    return;
+  }
+  if (t.art === "detektiv") {
+    const Ly = t.layout, b = Ly.b, S = Ly.schritte;
+    const falsch = [];
+    if (Ly.quotientText !== S.map((s) => s.ziffer).join("")) falsch.push("q");
+    let kette = true;
+    S.forEach((s, i) => {
+      if (s.produkt !== s.ziffer * b) falsch.push("p" + i);
+      if (s.diff !== s.teil - s.produkt) falsch.push("d" + i);
+      if (s.ziffer !== Math.floor(s.teil / b) && !falsch.includes("p" + i)) kette = false;
+      if (i > 0 && s.teil !== S[i - 1].diff * 10 + Ly.ziffern[s.ende]) kette = false;
+    });
+    ok(kette, `${T}: alles außer dem Fehler ist folgerichtig gerechnet`);
+    ok(falsch.length === 1 && falsch[0] === t.loesung, `${T}: genau ein Fehler, und zwar in ${t.loesung} (${falsch.join(",")})`);
+    const a = Number(Ly.ziffern.join(""));
+    ok(t.richtig === L.ergebnisText(Math.floor(a / b), a % b), `${T}: richtiges Ergebnis in der Erklärung`);
+    ok(L.check(t, t.loesung).ok && t.zeilen.filter((z) => z !== t.loesung).every((z) => !L.check(t, z).ok), `${T}: nur die Fehlerzeile zählt`);
+    if (k.fehler) ok(k.fehler.includes(t.fehlerArt), `${T}: Fehlerart passt zur Karte`);
+    return;
+  }
+  if (t.modus === "ueberschlag-wahl") {
+    const [a, b] = t.text.split(" : ").map(zahlAus), q = a / b;
+    ok(q === Math.floor(q), `${T}: geht glatt auf`);
+    const nah = t.optionen.filter((o) => Math.abs(Math.log10(zahlAus(o) / q)) < 0.3);
+    ok(nah.length === 1 && nah[0] === t.loesung, `${T}: genau eine Option passt zur Größe von ${q}`);
+    return;
+  }
+  if (t.modus === "plausibel") {
+    const m = t.text.match(/^(.*) : (\d+) = (.*)$/); const a = zahlAus(m[1]), b = Number(m[2]), x = zahlAus(m[3]);
+    ok(t.loesung === (x === a / b), `${T}: Stimmt genau dann, wenn das Ergebnis stimmt`);
+    if (!t.loesung) ok(x * 5 < a / b || x > (a / b) * 5, `${T}: falsches Ergebnis ist per Überschlag erkennbar`);
+    return;
+  }
+  if (t.modus === "umkehr") {
+    const m = t.text.match(/^☐ : (\d+) = ([\d\s\u00a0]+?)(?: Rest (\d+))?$/);
+    ok(!!m, `${T}: Aufgabe lesbar (${t.text})`); if (!m) return;
+    const b = Number(m[1]), q = zahlAus(m[2]), r = Number(m[3] || 0);
+    ok(r < b && t.loesung === q * b + r && Math.floor(t.loesung / b) === q && t.loesung % b === r, `${T}: fehlende Zahl stimmt`);
+    return;
+  }
+  if (t.modus === "kopf") {
+    const [a, b] = t.text.replace(" = ?", "").split(" : ").map(zahlAus);
+    ok(t.loesung === a / b && a % b === 0, `${T}: Kopfrechnung stimmt (${a} : ${b})`);
+    return;
+  }
+  if (t.modus === "sach") {
+    const muster = new RegExp("^" + k.text.replace(/[.*+?^$()|[\]\\]/g, "\\$&").replace(/\{(?!a\}|b\})/g, "\\{").replace("{a}", "([\\d\\s\\u00a0]+)").replace("{b}", "([\\d\\s\\u00a0]+)") + "$");
+    const m = t.text.match(muster);
+    ok(!!m, `${T}: Zahlen im Text gefunden`); if (!m) return;
+    const posA = k.text.indexOf("{a}"), posB = k.text.indexOf("{b}");
+    const a = zahlAus(posA < posB ? m[1] : m[2]), b = zahlAus(posA < posB ? m[2] : m[1]);
+    ok(bereich(k.a, a) && bereich(k.b, b), `${T}: Zahlen im Bereich (${a}, ${b})`);
+    const q = Math.floor(a / b), r = a % b;
+    if (k.rest === true) ok(r > 0, `${T}: es bleibt ein Rest`);
+    if (k.rest === false) ok(r === 0, `${T}: geht glatt auf`);
+    ok(t.loesung === (k.antwort === "r" ? r : k.antwort === "auf" ? q + 1 : q), `${T}: Antwort stimmt (${a} : ${b}, ${k.antwort})`);
+    return;
+  }
+  if (t.modus === "passt-wahl" || t.modus === "passt-zahl") {
+    const m = t.frage.match(/die (\d+) in (\d+)\?/); const b = Number(m[1]), n = Number(m[2]);
+    ok(n < 10 * b && String(t.loesung) === String(Math.floor(n / b)), `${T}: ${b} passt ${Math.floor(n / b)}-mal in ${n}`);
+    if (t.optionen) ok(t.optionen.filter((o) => Number(o) * b <= n && (Number(o) + 1) * b > n).length === 1, `${T}: genau eine Option passt`);
+  }
 }
 
 // ---------- Unabhängige Nachrechnung jeder Aufgabe ----------
@@ -107,6 +248,7 @@ for (const fach of FAECHER) {
     ok(JSON.stringify(t) === JSON.stringify(L.makeTask(fach, teil.id, modus, seed)), `${T}: gleicher Startwert, gleiche Aufgabe`);
     ok(t.frage && t.tipp && t.erklaerung, `${T}: Frage, Tipp und Erklärung vorhanden`);
     const e = erwartet(fach, teil, modus, t);
+    if (L.TYPEN.indexOf(teil.karte.typ) >= L.TYPEN.indexOf("teilen")) pruefeMathe(fach, teil, t, T);
     if (e !== undefined) ok(JSON.stringify(t.loesung) === JSON.stringify(e), `${T}: Lösung stimmt mit Inhalt (${JSON.stringify(t.loesung)} statt ${JSON.stringify(e)})`);
     switch (t.art) {
       case "wahl": {
@@ -179,9 +321,12 @@ for (const fach of FAECHER) {
         ok(L.check(t, String(t.loesung)).ok, `${T}: Zahl angenommen`);
         ok(!L.check(t, String(t.loesung + (t.toleranz || 0) + 1)).ok, `${T}: falsche Zahl abgelehnt`);
         break;
-      case "wahr":
-        ok(L.check(t, teil.karte.wahr).ok && !L.check(t, !teil.karte.wahr).ok, `${T}: wahr/falsch`);
+      case "wahr": {
+        const w = teil.karte.typ === "wahr" ? teil.karte.wahr : t.loesung;
+        ok(L.check(t, w).ok && !L.check(t, !w).ok, `${T}: wahr/falsch`);
         break;
+      }
+      case "division": case "ergebnis": case "detektiv": break; // oben in pruefeMathe
       case "tippen":
         ok(L.check(t, t.loesung).ok, `${T}: richtige Stelle angenommen`);
         for (const m of teil.karte.marken) if (m.nr !== t.loesung) ok(!L.check(t, m.nr).ok, `${T}: falsche Stelle ${m.nr} abgelehnt`);
@@ -273,7 +418,15 @@ for (const roh of [null, undefined, "kaputt", 42, [], { muenzen: "abc" }, { fort
   ok(L.spielStart(s, "run", H).grund === "limit" && s.tokens === 7, "Tageslimit: kein drittes Spiel, kein Token weg");
   ok(L.spielEnde(s, "run", 120).rekord && !L.spielEnde(s, "run", 80).rekord && s.spiele.run.best === 120, "Rekord wird gemerkt");
   const m = L.migrate({ tokens: -3, spiele: { run: { best: "x" } }, theme: "gibtsnicht", einst: { spieleProTag: 99 } });
-  ok(m.tokens === 0 && m.spiele.run.best === 0 && m.spiele.bloecke.best === 0 && m.theme === "nacht" && m.einst.spieleProTag === 20, "Spielhalle-Daten werden bereinigt");
+  ok(m.tokens === 0 && m.spiele.run.best === 0 && m.spiele.sprung.best === 0 && m.theme === "nacht" && m.einst.spieleProTag === 20, "Spielhalle-Daten werden bereinigt");
+  // Stand aus Version 5: Blöcke-Rekord bleibt erhalten, Sky Jump kommt dazu
+  const alt = L.migrate({ spiele: { run: { best: 50, runden: 3 }, bloecke: { best: 900, runden: 4 } } });
+  ok(alt.spiele.bloecke.best === 900 && alt.spiele.run.best === 50 && alt.spiele.sprung.runden === 0, "alter Stand: Rekorde bleiben, neues Spiel startet bei 0");
+  ok(L.spielStart(Object.assign(L.defaults(), { tokens: 1 }), "sprung", H).ok, "Sky Jump kostet wie Run einen Token");
+  // Erklärungen: XP einmal je Thema
+  const e = L.defaults();
+  ok(L.erklaerungGeschafft(e, "mathe/combo", H) && e.punkte === L.LOHN.punkteErklaerung && !L.erklaerungGeschafft(e, "mathe/combo", H) && e.punkte === L.LOHN.punkteErklaerung, "Erklärung: XP nur beim ersten Mal");
+  ok(L.migrate(JSON.parse(JSON.stringify(e))).gesehen["mathe/combo"] === H && Object.keys(L.migrate({ gesehen: { x: "kaputt" } }).gesehen).length === 0, "Erklärungen bleiben gespeichert, kaputte Daten fallen weg");
   ok(L.THEMES.every((t) => t.id && t.name && t.ab >= 1) && L.THEMES.filter((t) => t.ab === 1).length >= 2, "Themes mit Freischalt-Level");
 }
 
@@ -299,6 +452,7 @@ for (const fach of FAECHER) {
   ok(L.planThemen(fach).every((t) => p.some((x) => L.teilById(fach, x.teil).thema === t.id)), `${fach.id}: Probe deckt alle Themen ab (ohne Bonus)`);
   ok(p.every((x) => !fach.themen.find((t) => t.id === L.teilById(fach, x.teil).thema).bonus) || L.planThemen(fach).some((t) => t.bonus), `${fach.id}: Probe ohne Bonus-Themen`);
   ok(p.every((x) => L.makeTask(fach, x.teil, x.modus, x.seed)), `${fach.id}: Probe-Aufgaben entstehen`);
+  ok(p.every((x) => L.teilById(fach, x.teil).karte.typ !== "teilen" || x.modus === "teilen-ergebnis"), `${fach.id}: in der Probe wird auf Papier geteilt`);
   for (let i = 0; i < 6; i++) for (const x of L.fachTeile(fach)) L.record(s, fach.id, x.id, true, "2026-11-13");
   ok(L.bereitschaft(s, fach) === 100, `${fach.id}: alles sicher = 100 %`);
 }

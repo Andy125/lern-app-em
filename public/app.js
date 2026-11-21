@@ -221,7 +221,8 @@
     const h = gleich[((L.tageBis("2026-01-01", heute()) % gleich.length) + gleich.length) % gleich.length];
     const etappen = L.etappenFuer(h.p).map((e) => Object.assign({}, e, { fach: h.f.id }));
     const knapp = h.d != null && h.d <= 2;
-    const n = liste.find((x) => x !== h);
+    const andere = liste.filter((x) => x !== h);
+    const n = andere.length ? andere[((L.tageBis("2026-01-01", heute()) % andere.length) + andere.length) % andere.length] : null;
     if (n && !knapp && etappen.length === 3) {
       const nt = n.p.art === "lernen" ? n.p.themen : null;
       const gesehen = L.fachTeile(n.f).some((t) => L.teilStand(S, n.f.id, t.id).n > 0);
@@ -323,6 +324,7 @@
       </section>
       <section class="kacheln">
         <button class="kachel" data-act="themen"><span>🎯</span>Üben</button>
+        ${hatErklaerung(f) ? `<button class="kachel" data-act="erklaerungen"><span>📺</span>So geht's${erklOffen(f) ? ` <b class="zahl-badge">${erklOffen(f)}</b>` : ""}</button>` : ""}
         <button class="kachel" data-act="kiste" ${kiste ? "" : "disabled"}><span>🧩</span>Fehler${kiste ? ` <b class="zahl-badge">${kiste}</b>` : ""}</button>
         <button class="kachel" data-act="karten"><span>📖</span>Karten</button>
         <button class="kachel" data-act="probe-start"><span>📝</span>Probe</button>
@@ -364,7 +366,8 @@
     const s = R.specs[R.i];
     R.task = L.makeTask(rf(), s.teil, s.modus, s.seed);
     if (!R.task) return naechsteAufgabe();
-    R.versuche = 0; R.status = "offen"; R.antwort = startAntwort(R.task); R.wahl = null; R.falsch = []; R.tippOffen = false;
+    R.versuche = 0; R.status = "offen"; R.antwort = startAntwort(R.task); R.wahl = null; R.falsch = []; R.tippOffen = false; R.hinweis = ""; R.bossBonus = false;
+    R.div = R.task.art === "division" ? { pos: 0, eingabe: "", fehlerHier: 0, hinweis: "", geholfen: false, combo: 0 } : null;
     ui.ansicht = "runde"; letzteAktion = Date.now();
     render();
     if (S.einst.vorlesen) vorlesen();
@@ -375,6 +378,7 @@
       case "luecke": return t.loesung.map(() => null);
       case "paare": return {};
       case "mehr": return [];
+      case "ergebnis": return { q: "", r: "" };
       default: return "";
     }
   }
@@ -387,40 +391,77 @@
     if (!r.ok && r.leer) { toast("Schreib zuerst etwas hinein."); return; }
     zeitBuchen();
     const T = tag();
-    if (r.ok) {
-      const erster = R.versuche === 0 && !R.tippOffen;
-      if (R.versuche === 0) L.record(S, f.id, t.teil, erster, heute());
-      R.status = "richtig"; R.richtig++;
-      R.serie = erster ? R.serie + 1 : 0;
-      // Auf Anhieb zählt nur bei den Aufgaben der Etappe, nicht bei den wiederholten
-      if (erster && !(R.specs[R.i] && R.specs[R.i].nochmal)) R.ersteRichtig++;
-      let m = erster ? L.LOHN.richtig : L.LOHN.spaeter;
-      if (erster && R.serie > 0 && R.serie % L.LOHN.combo === 0) m += L.LOHN.comboBonus;
-      S.muenzen += m; S.punkte += erster ? L.LOHN.punkteRichtig : L.LOHN.punkteSpaeter;
-      T.aufgaben++; T.richtig++;
-      R.lob = R.versuche === 0 ? pick(LOB) : pick(LOB_SPAETER);
-      R.exakt = r.exakt !== false;
-      ton(R.serie);
-      speichern(); render(); if (m) plusAnzeigen("+" + m);
-      if (S.einst.vorlesen && t.englisch) sprich([[t.englisch, "en"]]);
-      return;
-    }
+    if (r.ok) return belohneRichtig(R.versuche === 0 && !R.tippOffen, r);
     R.versuche++; R.serie = 0;
-    R.hinweis = r.grossKlein ? "Achte auf Groß- und Kleinschreibung: Englische Nomen schreibt man klein." : r.fast ? "Ganz knapp! Ein kleiner Schreibfehler, schau genau auf jeden Buchstaben." : "";
+    R.hinweis = r.hinweis || (r.grossKlein ? "Achte auf Groß- und Kleinschreibung: Englische Nomen schreibt man klein." : r.fast ? "Ganz knapp! Ein kleiner Schreibfehler, schau genau auf jeden Buchstaben." : "");
     if (R.versuche === 1) L.record(S, f.id, t.teil, false, heute());
     // Teilweise Richtiges bleibt stehen, Falsches wird zurückgelegt
-    if (t.art === "wahl" || t.art === "tippen") R.falsch.push(antwort);
+    if (t.art === "wahl" || t.art === "tippen" || t.art === "detektiv") R.falsch.push(antwort);
     if (t.art === "reihe") R.antwort = R.antwort.map((x, i) => (r.richtig[i] ? x : null));
     if (t.art === "luecke") R.antwort = R.antwort.map((x, i) => (r.richtig[i] ? x : null));
     if (t.art === "paare") { const neu = {}; for (const l of Object.keys(R.antwort)) if (!r.falsch.includes(l)) neu[l] = R.antwort[l]; R.antwort = neu; R.wahl = null; }
     if (t.art === "mehr") { R.falsch = r.falsch; R.antwort = R.antwort.filter((x) => !r.falsch.includes(x)); R.fehlt = r.fehlt.length > 0; }
-    if (R.versuche >= maxVersuche(t)) {
-      R.status = "loesung"; R.text = pick(LOESUNG);
-      T.aufgaben++;
-      // Gleich noch einmal üben: am Ende der Etappe mit neuem Startwert (höchstens zweimal pro Etappe)
-      if (R.nochmal < 2) { R.nochmal++; R.specs.push({ teil: t.teil, modus: t.modus, seed: zufall(), nochmal: true }); }
-    } else { R.status = "tipp"; R.text = pick(FAST); }
+    if (R.versuche >= maxVersuche(t)) zeigeLoesung(pick(LOESUNG));
+    else { R.status = "tipp"; R.text = pick(FAST); }
     speichern(); render();
+  }
+  // Richtig gelöst: Münzen nur auf Anhieb, Combo alle fünf in Folge, bei Boss-Aufgaben ohne Fehler ein Extra
+  function belohneRichtig(erster, r) {
+    const R = ui.runde, t = R.task, f = rf(), T = tag();
+    if (R.versuche === 0) L.record(S, f.id, t.teil, erster, heute());
+    R.status = "richtig"; R.richtig++;
+    R.serie = erster ? R.serie + 1 : 0;
+    // Auf Anhieb zählt nur bei den Aufgaben der Etappe, nicht bei den wiederholten
+    if (erster && !(R.specs[R.i] && R.specs[R.i].nochmal)) R.ersteRichtig++;
+    let m = erster ? L.LOHN.richtig : L.LOHN.spaeter;
+    if (erster && R.serie > 0 && R.serie % L.LOHN.combo === 0) m += L.LOHN.comboBonus;
+    if (erster && t.boss) { m += L.LOHN.bossMuenzen; S.punkte += L.LOHN.punkteBoss; R.bossBonus = true; }
+    S.muenzen += m; S.punkte += erster ? L.LOHN.punkteRichtig : L.LOHN.punkteSpaeter;
+    T.aufgaben++; T.richtig++;
+    R.lob = R.versuche === 0 ? pick(LOB) : pick(LOB_SPAETER);
+    R.exakt = !r || r.exakt !== false;
+    R.perfekt = erster && t.art === "division";
+    ton(R.serie);
+    speichern(); render(); if (m) plusAnzeigen("+" + m);
+    if (R.perfekt || R.bossBonus) konfetti();
+    if (S.einst.vorlesen && t.englisch) sprich([[t.englisch, "en"]]);
+  }
+  // Lösung zeigen; die Aufgabe kommt am Ende der Etappe mit neuem Startwert noch einmal (höchstens zweimal pro Etappe)
+  function zeigeLoesung(text) {
+    const R = ui.runde, t = R.task;
+    R.status = "loesung"; R.text = text;
+    tag().aufgaben++;
+    if (R.nochmal < 2) { R.nochmal++; R.specs.push({ teil: t.teil, modus: t.modus, seed: zufall(), nochmal: true }); }
+  }
+  // Rechen-Werkstatt: jede Eingabe wird sofort geprüft. Nach zwei Fehlern an derselben Stelle trägt die App die
+  // richtige Zahl ein und erklärt sie. Auf Anhieb zählt nur eine Rechnung ganz ohne Fehler und ohne Tipp.
+  function divEingabe(wert) {
+    const R = ui.runde, t = R.task, D = R.div, f = rf();
+    if (!D || (R.status !== "offen" && R.status !== "tipp")) return;
+    const m = t.ablauf[D.pos];
+    const r = L.divPruefe(t, D.pos, wert);
+    if (r.leer) { toast("Tippe zuerst eine Zahl."); return; }
+    zeitBuchen();
+    if (r.ok) {
+      D.pos++; D.eingabe = ""; D.fehlerHier = 0; D.hinweis = ""; D.combo++;
+      if (m.typ !== "start" && m.typ !== "runter") ton(Math.min(9, D.combo));
+      if (t.ablauf[D.pos].typ === "fertig") return divFertig();
+      render(); return;
+    }
+    if (R.versuche === 0) L.record(S, f.id, t.teil, false, heute());
+    R.versuche++; R.serie = 0; D.combo = 0; D.fehlerHier++; D.eingabe = "";
+    if (D.fehlerHier >= 2) {
+      const richtig = m.typ === "start" ? t.div.ziffern.slice(0, t.div.anfang).join("") : m.wert;
+      D.geholfen = true; D.fehlerHier = 0; D.pos++;
+      D.hinweis = (r.text ? r.text + " " : "") + "Richtig ist " + richtig + ". Ich trage es für dich ein.";
+      if (t.ablauf[D.pos].typ === "fertig") { speichern(); return divFertig(); }
+    } else D.hinweis = r.text || "Noch nicht. Schau noch mal genau hin.";
+    speichern(); render();
+  }
+  function divFertig() {
+    const R = ui.runde, D = R.div;
+    if (D.geholfen) { zeigeLoesung("Geschafft, mit etwas Hilfe."); speichern(); render(); return; }
+    belohneRichtig(R.versuche === 0 && !R.tippOffen, null);
   }
   // Belohnung nach Leistung: Token nur mit 80 % auf Anhieb, Münzen ab der Hälfte, Mission gibt einen Token extra
   function etappeFertig() {
@@ -491,12 +532,115 @@
     return `<figure class="fig"><svg viewBox="${esc(k.viewBox)}" role="img" aria-label="${esc(k.titel || "Bild")}" ${tippBild ? 'data-act="tippen-bild"' : ""}>${k.svg}${marken}</svg></figure>`;
   }
 
+  // ---------- Mathe: Rechnung auf Karopapier ----------
+  // Zeichnet eine schriftliche Division wie im Heft. lay: { ziffern, b, schritte, quotientText, rest }.
+  // opt.ablauf und opt.pos: nur die Schritte vor pos sind sichtbar, an pos steht die Eingabe (opt.eingabe).
+  // opt.zeilen: Detektiv, jede Zeile ist antippbar ({ id: Klasse }). Ohne ablauf ist alles sichtbar.
+  const divLayout = (t) => ({ ziffern: t.div.ziffern, b: t.div.b, schritte: t.div.schritte, quotientText: String(t.div.quotient), rest: t.div.rest });
+  function rechnungHtml(lay, opt) {
+    opt = opt || {};
+    const n = lay.ziffern.length, B = String(lay.b), S = lay.schritte, ablauf = opt.ablauf || null;
+    const pos = ablauf ? opt.pos : Infinity;
+    const idx = {}; if (ablauf) ablauf.forEach((m, i) => { idx[m.typ + (m.s != null ? m.s : "")] = i; });
+    const zeig = (k) => !ablauf || idx[k] < pos, jetzt = (k) => !!ablauf && idx[k] === pos;
+    const nk = (k) => (ablauf && idx[k] === pos - 1 ? " neu" : ""); // gerade eingetragen: kleine Animation
+    const cQ = n + 4 + B.length, qLen = Math.max(S.length, String(lay.quotientText || "").length);
+    const spalten = cQ + qLen + B.length; // Platz für «R» und den Rest
+    const zellen = {}; // "zeile,spalte" -> { t, k }
+    const setze = (r, c, t, k) => { const key = r + "," + c, alt = zellen[key]; zellen[key] = { r, c, t: t != null ? t : alt ? alt.t : "", k: ((alt ? alt.k : "") + " " + (k || "")).trim() }; };
+    const strich = (r, von, bis) => { for (let c = von; c <= bis; c++) setze(r, c, null, "u"); };
+    const eingabe = (r, c, typ) => {
+      const e = String(opt.eingabe || "");
+      if (!e) setze(r, c, "", "cursor");
+      else for (let i = 0; i < e.length; i++) setze(r, c - e.length + 1 + i, e[i], "eingabe" + (i === e.length - 1 ? " cursor" : ""));
+      if (typ === "produkt") setze(r, c - Math.max(1, e.length), "−", "leise");
+    };
+    // Zeile 1: Dividend : Divisor = Ergebnis
+    const anfang = (S[0] ? S[0].ende : 0) + 1;
+    lay.ziffern.forEach((d, j) => {
+      let k = "";
+      if (zeig("start") && j < anfang && ablauf) k = "anfang";
+      const s = S.findIndex((x, i) => i > 0 && x.ende === j);
+      if (s > 0 && zeig("runter" + (s - 1)) && ablauf) k = "geholt";
+      if (s > 0 && jetzt("runter" + (s - 1))) k = "ziel";
+      if (jetzt("start")) k = "waehlbar";
+      setze(1, j + 2, String(d), k);
+    });
+    setze(1, n + 2, ":", "zeichen");
+    for (let i = 0; i < B.length; i++) setze(1, n + 3 + i, B[i], "divisor");
+    setze(1, n + 3 + B.length, "=", "zeichen");
+    if (!ablauf) String(lay.quotientText).split("").forEach((d, i) => setze(1, cQ + i, d, "ergebnis"));
+    else S.forEach((s, k) => { if (zeig("ziffer" + k)) setze(1, cQ + k, String(s.ziffer), "ergebnis" + nk("ziffer" + k)); else if (jetzt("ziffer" + k)) eingabe(1, cQ + k, "ziffer"); });
+    const fertig = !ablauf || idx.fertig <= pos;
+    const qEnde = cQ + (ablauf ? S.length : String(lay.quotientText).length);
+    if (fertig && lay.rest) { setze(1, qEnde, "R", "zeichen rest"); String(lay.rest).split("").forEach((d, i) => setze(1, qEnde + 1 + i, d, "ergebnis rest")); }
+    // Für jeden Schritt: Produkt mit Minus und Strich, darunter die Differenz und die heruntergeholte Ziffer
+    S.forEach((s, k) => {
+      const c = s.ende + 2, rP = 2 + 2 * k, rD = 3 + 2 * k;
+      const teilVon = k === 0 ? 2 : c - String(S[k - 1].diff).length;
+      if (zeig("produkt" + k)) {
+        const p = String(s.produkt);
+        for (let i = 0; i < p.length; i++) setze(rP, c - p.length + 1 + i, p[i], nk("produkt" + k));
+        setze(rP, c - p.length, "−", "zeichen");
+        strich(rP, Math.min(c - p.length, teilVon), c);
+      } else if (jetzt("produkt" + k)) eingabe(rP, c, "produkt");
+      if (zeig("diff" + k)) { const d = String(s.diff); for (let i = 0; i < d.length; i++) setze(rD, c - d.length + 1 + i, d[i], (k === S.length - 1 && lay.rest && fertig ? "rest" : "") + nk("diff" + k)); }
+      else if (jetzt("diff" + k)) eingabe(rD, c, "diff");
+      if (k < S.length - 1) {
+        if (zeig("runter" + k)) setze(rD, c + 1, String(lay.ziffern[s.ende + 1]), "runter" + nk("runter" + k));
+        else if (jetzt("runter" + k)) setze(rD, c + 1, "↓", "ziel");
+      }
+    });
+    let h = "";
+    for (const key of Object.keys(zellen)) { const z = zellen[key]; h += `<span class="z ${z.k}" style="grid-row:${z.r};grid-column:${z.c}">${esc(z.t)}</span>`; }
+    // Detektiv: jede Zeile als Knopf unter den Ziffern
+    if (opt.zeilen) for (const id of Object.keys(opt.zeilen)) {
+      const st = opt.zeilen[id];
+      const r = id === "q" ? 1 : id[0] === "p" ? 2 + 2 * Number(id.slice(1)) : 3 + 2 * Number(id.slice(1));
+      const von = id === "q" ? cQ - 1 : 1, bis = id === "q" ? spalten + 1 : spalten + 1;
+      const name = id === "q" ? "Ergebnis" : (id[0] === "p" ? "Malnehmen" : "Minus") + " in Schritt " + (Number(id.slice(1)) + 1);
+      const aus = !opt.zeilenAktiv || st === "falsch";
+      h += `<button class="zeile ${st}" style="grid-row:${r};grid-column:${von} / ${bis}" data-act="zeile" data-arg="${id}" aria-label="${name}" ${aus ? "disabled" : ""}></button>`;
+    }
+    return `<div class="rechnung${opt.zeilen ? " detektiv" : ""}" style="--spalten:${spalten};--zeilen:${1 + 2 * S.length};grid-template-columns:repeat(${spalten},var(--zelle));grid-template-rows:repeat(${1 + 2 * S.length},var(--zeile))" role="group" aria-label="${esc(L.divText(Number(lay.ziffern.join("")), lay.b))}">${h}</div>`;
+  }
+  // Einmaleins-Leiter: die Vielfachen des Divisors zum Nachschauen
+  const leiterHtml = (b) => `<div class="leiter" aria-label="Einmaleins-Leiter von ${b}"><b>Leiter</b>${[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => `<span>${i} · ${b} = <b>${i * b}</b></span>`).join("")}</div>`;
+  const MOVES = [["÷", "Teilen"], ["×", "Mal"], ["−", "Minus"], ["↓", "Runter"]];
+  function divPrompt(t, m) {
+    const b = t.div.b, s = m.s != null ? t.div.schritte[m.s] : null, gefuehrt = t.stufe === 0;
+    switch (m.typ) {
+      case "start": return gefuehrt ? `Womit fängst du an? Die ${b} muss hineinpassen. Nimm so wenige Ziffern wie möglich.` : "Womit fängst du an?";
+      case "ziffer": return gefuehrt ? `Teilen: Wie oft passt ${b} in ${s.teil}?` : "Teilen";
+      case "produkt": return gefuehrt ? `Mal: ${s.ziffer} · ${b} = ?` : "Mal";
+      case "diff": return gefuehrt ? `Minus: ${s.teil} − ${s.produkt} = ?` : "Minus";
+      case "runter": return gefuehrt ? `Runter: Hol die nächste Ziffer herunter, die ${m.wert}.` : "Runter";
+    }
+    return "";
+  }
+  function werkstattHtml(t, R, fertig) {
+    const D = R.div || { pos: 0, eingabe: "" };
+    const m = t.ablauf[Math.min(D.pos, t.ablauf.length - 1)];
+    const moveNr = { ziffer: 0, produkt: 1, diff: 2, runter: 3 }[m.typ];
+    let h = `<div class="moves" aria-hidden="true">${MOVES.map(([z, name], i) => `<span class="move${!fertig && i === moveNr ? " an" : ""}${D.combo >= 4 && !fertig ? " heiss" : ""}"><b>${z}</b>${name}</span>`).join("")}</div>`;
+    if (!fertig) h += `<p class="prompt${D.hinweis ? " fehler" : ""}" role="status">${esc(D.hinweis || divPrompt(t, m))}</p>`;
+    h += `<div class="werkstatt"><div class="werkstatt-blatt">${rechnungHtml(divLayout(t), { ablauf: t.ablauf, pos: fertig ? t.ablauf.length : D.pos, eingabe: D.eingabe })}`;
+    if (!fertig && (t.stufe === 0 || R.tippOffen)) h += leiterHtml(t.div.b);
+    h += `</div>`;
+    if (!fertig) {
+      if (m.typ === "start") h += `<div class="anfang-wahl">${t.anfaenge.map((a, i) => `<button class="option" data-act="div-start" data-arg="${i}">${a}</button>`).join("")}</div>`;
+      else if (m.typ === "runter") h += `<div class="runter-platz"><button class="btn haupt gross" data-act="div-runter">↓ ${t.stufe === 0 ? "Die " + m.wert + " runterholen" : "Runterholen"}</button></div>`;
+      else h += `<div class="ziffernblock" role="group" aria-label="Ziffern">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => `<button data-act="np" data-arg="${d}">${d}</button>`).join("")}<button data-act="np-weg" aria-label="Löschen" ${D.eingabe ? "" : "disabled"}>⌫</button><button data-act="np" data-arg="0">0</button><button class="ok" data-act="np-ok" aria-label="Fertig" ${D.eingabe ? "" : "disabled"}>OK</button></div>`;
+    }
+    return h + `</div>`;
+  }
+
   // ---------- Aufgabe anzeigen ----------
   function aufgabeHtml(t, R, probe) {
     const fertig = !probe && (R.status === "richtig" || R.status === "loesung");
     const loes = !probe && R.status === "loesung";
-    let h = `<div class="frage-zeile"><h2 class="frage">${esc(t.frage)}</h2><button class="vorlesen" data-act="vorlesen" aria-label="Vorlesen">🔊</button></div>`;
-    if (t.text) h += `<p class="aufgaben-text${t.art === "wahr" ? " satz" : ""}"${t.textSprache === "en" ? ' lang="en"' : ""}>${esc(t.text)}${t.textSprache === "en" && t.modus === "en-de-wahl" ? ` <button class="vorlesen klein inline" data-act="sag-en" data-arg="${esc(t.text)}" aria-label="Englisch anhören">🔊</button>` : ""}</p>`;
+    let h = `<div class="frage-zeile"><h2 class="frage">${t.boss ? `<span class="boss">Boss-Level</span> ` : ""}${esc(t.frage)}</h2>${t.art === "division" && !probe ? `<button class="vorlesen" data-act="div-hilfe" aria-label="Wie ging das noch mal?">?</button>` : ""}<button class="vorlesen" data-act="vorlesen" aria-label="Vorlesen">🔊</button></div>`;
+    if (t.text && t.art !== "division") h += `<p class="aufgaben-text${t.art === "wahr" ? " satz" : ""}"${t.textSprache === "en" ? ' lang="en"' : ""}>${esc(t.text)}${t.textSprache === "en" && t.modus === "en-de-wahl" ? ` <button class="vorlesen klein inline" data-act="sag-en" data-arg="${esc(t.text)}" aria-label="Englisch anhören">🔊</button>` : ""}</p>`;
     if (t.fig) h += figHtml(t, R, probe);
     switch (t.art) {
       case "wahl": case "wahr": {
@@ -569,6 +713,22 @@
       case "tippen":
         if (probe) h += pruefKnopf(probe, R.antwort !== "");
         break;
+      // ----- Mathe -----
+      case "division": h += werkstattHtml(t, R, fertig); break;
+      case "ergebnis": {
+        const ant = loes ? { q: t.loesung.q, r: t.loesung.r || "" } : R.antwort || {};
+        const feld = (id, wert) => `<input id="${id}" class="eingabe zahlfeld${loes ? " loesung" : ""}" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done" value="${esc(wert)}" ${fertig ? "disabled" : ""}`;
+        h += `<form class="ergebnis-felder" onsubmit="return false"><label>Ergebnis ${feld("eingabe", ant.q == null ? "" : ant.q)} aria-label="Ergebnis"></label><label>Rest ${feld("eingabe-rest", ant.r == null ? "" : ant.r)} aria-label="Rest" placeholder="kein Rest"></label></form>`;
+        if (!fertig) h += `<p class="leise klein">Bleibt nichts übrig, lass «Rest» leer.</p>` + pruefKnopf(probe, true);
+        break;
+      }
+      case "detektiv": {
+        const zs = {};
+        for (const id of t.zeilen) { let c = ""; if (probe && R.antwort === id) c = "gewaehlt"; if (!probe && R.falsch.includes(id)) c = "falsch"; if (fertig && id === t.loesung) c = "richtig"; zs[id] = c; }
+        h += `<div class="detektiv-blatt">${rechnungHtml(t.layout, { zeilen: zs, zeilenAktiv: probe || !fertig })}</div>`;
+        if (probe) h += pruefKnopf(probe, R.antwort !== "");
+        break;
+      }
     }
     return h;
   }
@@ -589,6 +749,8 @@
       case "zahl": l = `Richtig ist: <b>${esc(t.loesung)}${t.einheit ? " " + esc(t.einheit) : ""}</b>`; break;
       case "wahr": l = `Richtig ist: <b>${t.loesung ? "Stimmt" : "Stimmt nicht"}</b>`; break;
       case "tippen": l = `Hier ist es, grün markiert.`; break;
+      case "ergebnis": case "division": l = `Richtig ist: <b>${esc(L.divText(t.div.a, t.div.b))} = ${esc(L.ergebnisText(t.loesung.q, t.loesung.r))}</b>`; break;
+      case "detektiv": l = `Der Fehler steckt in der grün markierten Zeile.`; break;
       default: l = "";
     }
     return l;
@@ -603,10 +765,13 @@
     if (R.status === "tipp") {
       unten = `<div class="rueck tipp" role="status"><b>${esc(R.text)}</b>${R.hinweis ? `<p>${esc(R.hinweis)}</p>` : ""}<p>💡 ${esc(t.tipp)}</p>${t.art === "mehr" && R.fehlt ? `<p>Es fehlt noch etwas.</p>` : ""}</div>`;
     } else if (R.status === "richtig") {
-      unten = `<div class="rueck gut" role="status"><b>${esc(R.lob)}</b>${R.versuche > 0 && t.erklaerung ? `<p>${esc(t.erklaerung)}</p>` : ""}${hoeren}${warum}<button class="btn haupt" data-act="weiter" autofocus>Weiter</button></div>`;
+      const mathe = t.art === "division" || t.art === "ergebnis";
+      const stempel = R.perfekt ? `<span class="stempel">Perfekt</span>` : "";
+      const boss = R.bossBonus ? `<p class="boss-bonus">Boss besiegt! +${L.LOHN.bossMuenzen} Extra-Münzen und ${L.LOHN.punkteBoss} XP</p>` : "";
+      unten = `<div class="rueck gut" role="status">${stempel}<b>${esc(R.lob)}</b>${(R.versuche > 0 || mathe) && t.erklaerung ? `<p>${esc(t.erklaerung)}</p>` : ""}${boss}${hoeren}${warum}<button class="btn haupt" data-act="weiter" autofocus>Weiter</button></div>`;
     } else if (R.status === "loesung") {
-      unten = `<div class="rueck loesung" role="status"><b>${esc(R.text)}</b>${loesungKasten(t) ? `<p>${loesungKasten(t)}${t.art === "schreiben" && R.antwort ? vergleich(R.antwort, t.loesung) : ""}</p>` : ""}${hoeren}${t.erklaerung ? `<p>${esc(t.erklaerung)}</p>` : ""}${t.merk ? `<p class="merk">🧠 Merkhilfe: ${esc(t.merk)}</p>` : ""}${warum}<p class="leise klein">Diese Aufgabe kommt gleich noch einmal.</p><button class="btn haupt" data-act="weiter">Verstanden, weiter</button></div>`;
-    } else if (R.status === "offen" && t.tipp && t.art !== "wahr") {
+      unten = `<div class="rueck loesung" role="status"><b>${esc(R.text)}</b>${loesungKasten(t) ? `<p>${loesungKasten(t)}${t.art === "schreiben" && R.antwort ? vergleich(R.antwort, t.loesung) : ""}</p>` : ""}${hoeren}${t.erklaerung ? `<p>${esc(t.erklaerung)}</p>` : ""}${t.art === "ergebnis" ? `<div class="loesungs-rechnung">${rechnungHtml(divLayout(t))}</div>` : ""}${t.merk ? `<p class="merk">🧠 Merkhilfe: ${esc(t.merk)}</p>` : ""}${warum}<p class="leise klein">${t.neueZahlen ? "Gleich kommt so eine Aufgabe noch einmal, mit neuen Zahlen." : "Diese Aufgabe kommt gleich noch einmal."}</p><button class="btn haupt" data-act="weiter">Verstanden, weiter</button></div>`;
+    } else if (R.status === "offen" && t.tipp && t.art !== "wahr" && !(t.art === "division" && t.stufe === 0)) {
       unten = `<button class="tipp-knopf" data-act="tipp-zeigen">${R.tippOffen ? "💡 " + esc(t.tipp) : "💡 Ich brauche einen Tipp"}</button>`;
     }
     return `${rundeKopf()}<main class="aufgabe art-${t.art}">${aufgabeHtml(t, R, false)}${unten}</main>`;
@@ -619,7 +784,15 @@
       ${(() => { const ef = fachById(e.fach) || fach(); return `<h1>${esc(titel)}</h1><p class="untertitel">${FAECHER.length > 1 ? esc(ef.icon + " " + (ef.kurz || ef.name)) + ": " : ""}${esc(e.titel)}${e.themen ? ": " + esc(e.themen.map((id) => themaName(ef, id)).join(", ")) : ""}</p>
       ${e.themen && e.themen.length === 1 && e.art === "neu" ? warumBox(ef.themen.find((t) => t.id === e.themen[0])) : (() => { const fk = fakt(ef, e.themen, R.nr + L.tageBis("2026-01-01", heute())); return fk ? `<p class="fakt"><b>Fun Fact:</b> ${esc(fk)}</p>` : ""; })()}`; })()}
       <p class="leise">${e.n || S.einst.etappe} Aufgaben. ${e.art !== "kiste" ? `Mit ${L.tokenNoetig(e.n || S.einst.etappe)} auf Anhieb richtig gibt es einen Token.` : ""}</p>
-      <button class="btn haupt gross" data-act="etappe-los">Start</button></main>`;
+      ${(() => {
+        const ef = fachById(e.fach) || fach();
+        const th = e.themen && e.themen.length === 1 ? ef.themen.find((x) => x.id === e.themen[0]) : null;
+        if (!th || !th.erklaerung) return `<button class="btn haupt gross" data-act="etappe-los">Start</button>`;
+        const neu = !S.gesehen[erklKey(ef, th)];
+        const erkl = `<button class="btn${neu ? " haupt" : ""} gross" data-act="erkl" data-arg="${esc(ef.id + ":" + th.id)}">📺 So geht's${neu ? ": erst erklären lassen" : ""}</button>`;
+        const los = `<button class="btn${neu ? "" : " haupt"} gross" data-act="etappe-los">${neu ? "Gleich loslegen" : "Start"}</button>`;
+        return neu ? erkl + los : los + erkl;
+      })()}</main>`;
   }
   function etappeEnde() {
     const R = ui.runde;
@@ -699,6 +872,9 @@
         case "gruppen": return `<div class="lernkarte"><ul>${Object.keys(k.gruppen).map((g) => `<li><b>${esc(g)}:</b> ${esc(k.gruppen[g].join(", "))}</li>`).join("")}</ul></div>`;
         case "reihe": return `<div class="lernkarte"><b>${esc(k.titel || "")}</b><ol>${k.schritte.map((s) => `<li>${esc(s)}</li>`).join("")}</ol></div>`;
         case "luecke": return `<div class="lernkarte"><p>${esc(k.text).replace(/\{([^}]+)\}/g, "<b>$1</b>")}</p></div>`;
+        case "teilen": { const t = L.makeTask(f, k.id, "teilen-ergebnis", 7); return `<div class="lernkarte"><b>${esc(k.titel)}</b><p class="leise">Beispiel</p><div class="karten-rechnung">${rechnungHtml(divLayout(t))}</div><p>${esc(t.erklaerung)}</p></div>`; }
+        case "detektiv": { const t = L.makeTask(f, k.id, "detektiv", 7); const zs = {}; t.zeilen.forEach((id) => { zs[id] = id === t.loesung ? "richtig" : ""; }); return `<div class="lernkarte"><b>${esc(k.titel)}</b><p class="leise">Beispiel-Fall: Der Fehler ist grün markiert.</p><div class="karten-rechnung">${rechnungHtml(t.layout, { zeilen: zs, zeilenAktiv: false })}</div><p>${esc(t.erklaerung)}</p></div>`; }
+        case "ueberschlag": case "umkehr": case "kopf": case "sach": case "passt": { const t = L.makeTask(f, k.id, L.modi(k)[0], 7); return `<div class="lernkarte"><b>${esc(k.titel)}</b><p class="leise">Beispiel</p><p>${esc((k.typ === "sach" ? [t.text, t.frage] : [t.frage, t.text]).filter(Boolean).join(" "))}</p><p>${esc(t.erklaerung)}</p></div>`; }
         case "bild": return `<div class="lernkarte bildkarte"><b>${esc(k.titel || "")}</b><figure class="fig"><svg viewBox="${esc(k.viewBox)}">${k.svg}${k.marken.map((m) => `<g class="marke markiert"><circle cx="${m.x}" cy="${m.y}" r="13"/><text x="${m.x}" y="${m.y + 5}" text-anchor="middle">${m.nr}</text></g>`).join("")}</svg></figure><ol class="legende">${k.marken.slice().sort((a, b) => a.nr - b.nr).map((m) => `<li value="${m.nr}">${esc(m.begriff)}</li>`).join("")}</ol>${k.merk ? `<p class="merk">🧠 ${esc(k.merk)}</p>` : ""}</div>`;
       }
       return "";
@@ -706,6 +882,7 @@
     return `${kopf("Lernkarten", true)}<main class="liste">
       <nav class="reiter">${f.themen.map((x) => `<button class="${x === th ? "aktiv" : ""}" data-act="karten-thema" data-arg="${esc(x.id)}">${esc(x.icon || "")} ${esc(x.name)}</button>`).join("")}</nav>
       ${warumBox(th)}
+      ${th.erklaerung ? `<button class="btn haupt" data-act="erkl" data-arg="${esc(f.id + ":" + th.id)}">📺 So geht's: Erklärung ansehen</button>` : ""}
       ${(th.fakten || []).length ? `<div class="lernkarte fakten"><b>Wusstest du?</b><ul>${th.fakten.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
       ${inhalt}
       <button class="btn haupt" data-act="thema" data-arg="${esc(th.id)}">Dieses Thema üben</button></main>`;
@@ -726,6 +903,47 @@
         }).join("");
       }).join("")}</main>`;
   }
+
+  // ================= Erklärungen =================
+  // Folien je Thema: Bild oder durchgerechnetes Beispiel, am Ende ein Check. Wer ihn auf Anhieb schafft, bekommt einmal XP.
+  const erklKey = (f, th) => f.id + "/" + th.id;
+  const hatErklaerung = (f) => f.themen.some((th) => th.erklaerung && th.erklaerung.length);
+  const erklOffen = (f) => f.themen.filter((th) => th.erklaerung && !S.gesehen[erklKey(f, th)]).length;
+  function erklaerungenSeite() {
+    const f = fach();
+    return `${kopf("So geht's", true)}<main class="liste">
+      <p class="leise">Kurze Erklärungen mit Bildern und Beispielen. Am Ende wartet ein Check: Schaffst du ihn auf Anhieb, gibt es ${L.LOHN.punkteErklaerung} XP.</p>
+      ${f.themen.filter((th) => th.erklaerung).map((th) => { const ok = S.gesehen[erklKey(f, th)]; return `<button class="thema-karte${ok ? " geschafft" : ""}" data-act="erkl" data-arg="${esc(f.id + ":" + th.id)}"><span class="icon">${esc(th.icon || "📘")}</span><span class="name">${esc(th.name)}</span><span class="leise">${ok ? "✓ Check geschafft" : th.erklaerung.length + " Folien, +" + L.LOHN.punkteErklaerung + " XP"}</span></button>`; }).join("")}
+    </main>`;
+  }
+  const checkOptionen = (th, c) => L.R(L.hash(th.id + "|check")).shuffle([c.antwort].concat(c.falsch));
+  function erklaerungSeite() {
+    const f = fachById(ui.fachId) || fach();
+    const th = f.themen.find((x) => x.id === ui.thema) || f.themen[0];
+    const folien = th.erklaerung || [{ titel: th.name, text: [] }];
+    const i = Math.max(0, Math.min(folien.length - 1, ui.folie || 0)), fo = folien[i], letzte = i === folien.length - 1;
+    const C = ui.check || { falsch: [], ok: false };
+    const dots = folien.map((_, j) => `<i class="${j < i ? "fertig" : j === i ? "jetzt" : ""}"></i>`).join("");
+    let h = `<h1>${esc(fo.titel)}</h1>`;
+    if (fo.bild) h += `<figure class="fig erkl-bild">${fo.bild}</figure>`;
+    if (fo.rechnung) {
+      const D = L.divSchritte(fo.rechnung.a, fo.rechnung.b), ab = L.divAblauf(D);
+      h += `<div class="erkl-rechnung">${rechnungHtml({ ziffern: D.ziffern, b: D.b, schritte: D.schritte, quotientText: String(D.quotient), rest: D.rest }, { ablauf: ab, pos: fo.rechnung.bis === "alles" ? ab.length : fo.rechnung.bis, eingabe: "?" })}${fo.rechnung.leiter ? leiterHtml(D.b) : ""}</div>`;
+    }
+    if (fo.text) h += (Array.isArray(fo.text) ? fo.text : [fo.text]).map((x) => `<p>${esc(x)}</p>`).join("");
+    if (fo.check) {
+      const c = fo.check;
+      h += `<div class="erkl-check"><h2>${esc(c.frage)}</h2><div class="optionen">${checkOptionen(th, c).map((o, j) => `<button class="option${C.falsch.includes(o) ? " falsch" : ""}${C.ok && o === c.antwort ? " richtig" : ""}" data-act="erkl-check" data-arg="${j}" ${C.ok || C.falsch.includes(o) ? "disabled" : ""}>${esc(o)}</button>`).join("")}</div>`;
+      if (C.ok) h += `<div class="rueck gut" role="status"><b>${C.xp ? "Check geschafft! +" + C.xp + " XP" : "Richtig!"}</b>${c.erklaerung ? `<p>${esc(c.erklaerung)}</p>` : ""}${!C.xp && C.falsch.length ? `<p class="leise klein">XP gibt es, wenn der Check auf Anhieb klappt. Versuch es später noch mal.</p>` : ""}</div>`;
+      else if (C.falsch.length) h += `<div class="rueck tipp" role="status"><b>Noch nicht.</b><p>Blättere ruhig zurück und schau noch mal nach.</p></div>`;
+      h += `</div>`;
+    }
+    const los = ui.zurueck && ui.zurueck.ansicht === "etappe-start" ? "Los geht's" : "Fertig";
+    const nav = `<div class="knopfzeile erkl-nav">${i > 0 ? `<button class="btn" data-act="erkl-zurueck">‹ Zurück</button>` : ""}${!letzte ? `<button class="btn haupt" data-act="erkl-weiter">Weiter ›</button>` : !fo.check || C.ok ? `<button class="btn haupt" data-act="erkl-fertig">${los}</button>` : `<button class="btn leise-btn" data-act="erkl-fertig">Später</button>`}</div>`;
+    return `<header class="kopf runde-kopf"><button class="zurueck" data-act="erkl-fertig" aria-label="Schließen">✕</button><div class="runde-info"><div class="runde-titel">${esc((th.icon || "") + " So geht's: " + th.name)}</div><div class="fortschritt" aria-label="Folie ${i + 1} von ${folien.length}">${dots}</div></div><button class="vorlesen" data-act="erkl-vorlesen" aria-label="Vorlesen">🔊</button></header>
+      <main class="erklaerung">${h}${nav}</main>`;
+  }
+  function erklAktuell() { const f = fachById(ui.fachId) || fach(); const th = f.themen.find((x) => x.id === ui.thema) || f.themen[0]; return { f, th, fo: (th.erklaerung || [])[ui.folie || 0] }; }
 
   // ================= Probe-Arbeit =================
   function probeStart() {
@@ -757,6 +975,7 @@
     }
     let a = P.antwort;
     if (t.art === "schreiben" || t.art === "zahl") { const el = document.getElementById("eingabe"); a = el ? el.value : ""; }
+    if (t.art === "ergebnis") a = ergebnisLesen();
     const r = L.check(t, a);
     P.ergebnisse[P.i] = { teil: t.teil, thema: t.thema, ok: !!r.ok };
     probeNaechste();
@@ -836,7 +1055,7 @@
   }
 
   // ================= Spielhalle =================
-  const SPIELE = { run: { name: () => `${tierName()} Run`, text: "Springen, Doppelsprung, Knochen sammeln. Wie weit kommst du?" }, bloecke: { name: () => "Blöcke", text: "Blöcke drehen und stapeln. Volle Reihen verschwinden." } };
+  const SPIELE = { sprung: { name: () => "Sky Jump", text: "Von Wolke zu Wolke nach oben, bis ins All. Federn katapultieren dich hoch, braune Wolken bröckeln." }, run: { name: () => `${tierName()} Run`, text: "Springen, Doppelsprung, Knochen sammeln. Wie weit kommst du?" } };
   function spielhalle() {
     const rest = Math.max(0, S.einst.spieleProTag - (tagLesen().spiele || 0));
     const sperre = !S.einst.spieleProTag ? "Die Spielhalle ist gerade ausgeschaltet." : !S.tokens ? `Keine Tokens. Hol dir welche in der Mission: ${L.tokenNoetig(S.einst.etappe)} von ${S.einst.etappe} auf Anhieb richtig.` : !rest ? "Für heute ist die Spielhalle zu. Morgen geht es weiter." : "";
@@ -852,9 +1071,9 @@
   function spielSeite() {
     const art = ui.spielArt;
     const kopfzeile = `<header class="kopf runde-kopf"><button class="zurueck" data-act="spiel-abbrechen" aria-label="Spiel beenden">✕</button><div class="runde-info"><div class="runde-titel">${esc(SPIELE[art].name())}</div></div><div class="hud"><span>Punkte <b id="hud-punkte">0</b></span><span>Rekord <b>${S.spiele[art].best}</b></span></div></header>`;
-    if (art === "bloecke") return `${kopfzeile}<main class="spiel spiel-bloecke"><div class="bloecke-layout"><div class="spiel-feld-platz"><canvas class="spielfeld" aria-label="Spielfeld"></canvas></div>
-      <aside class="bloecke-info"><div>Als Nächstes<canvas class="vorschau"></canvas></div><div>Reihen<b id="hud-linien">0</b></div><div>Level<b id="hud-level">1</b></div><div>Zeit<b id="hud-zeit">4:00</b></div></aside></div>
-      <div class="steuerung"><button data-spiel="links" aria-label="Nach links">◀</button><button data-spiel="drehen" aria-label="Drehen">⟳</button><button data-spiel="rechts" aria-label="Nach rechts">▶</button><button data-spiel="runter" aria-label="Schneller">▼</button><button data-spiel="fallen" aria-label="Ganz fallen lassen">⤓</button></div></main>`;
+    if (art === "sprung") return `${kopfzeile}<main class="spiel spiel-sprung"><div class="sprung-platz"><canvas class="spielfeld" aria-label="Spielfeld"></canvas></div>
+      <div class="steuerung"><button data-spiel="links" aria-label="Nach links">◀</button><span class="sprung-info"><b id="hud-hoehe">0 m</b><small id="hud-zeit">3:00</small></span><button data-spiel="rechts" aria-label="Nach rechts">▶</button></div>
+      <p class="leise klein mitte-text">Halte links oder rechts gedrückt, auf dem Spielfeld oder mit den Knöpfen.</p></main>`;
     return `${kopfzeile}<main class="spiel spiel-run"><div class="run-platz"><canvas class="spielfeld" aria-label="Spielfeld"></canvas></div>
       <p class="leise">Tippen: springen. Länger drücken: höher. In der Luft noch mal tippen: Doppelsprung.</p></main>`;
   }
@@ -874,7 +1093,7 @@
       onPunkte: (z) => {
         const set = (id, v) => { const el = document.getElementById(id); if (el && el.textContent !== String(v)) el.textContent = v; };
         set("hud-punkte", z.punkte);
-        if (art === "bloecke") { set("hud-linien", z.linien); set("hud-level", z.level); const rest = Math.max(0, window.LN_SPIELE.BLOECKE.ZEITLIMIT - z.zeit) / 1000; set("hud-zeit", Math.floor(rest / 60) + ":" + String(Math.floor(rest % 60)).padStart(2, "0")); }
+        if (art === "sprung") { set("hud-hoehe", Math.floor(z.maxY / 10) + " m"); const rest = Math.max(0, window.LN_SPIELE.SPRUNG.ZEITLIMIT / 1000 - z.t); set("hud-zeit", Math.floor(rest / 60) + ":" + String(Math.floor(rest % 60)).padStart(2, "0")); }
       },
       onEnde: (erg) => spielVorbei(art, erg),
     });
@@ -885,9 +1104,9 @@
     const box = app.querySelector(".spiel"); if (!box) return;
     const rest = Math.max(0, S.einst.spieleProTag - (tagLesen().spiele || 0));
     const geht = S.tokens > 0 && rest > 0;
-    const grund = ui.spielAbbruch ? "Spiel beendet." : art === "bloecke" ? (erg.zeitUm ? "Zeit um." : "Kein Platz mehr.") : erg.grund === "grube" ? "In die Grube gefallen." : "Zusammengestoßen.";
+    const grund = ui.spielAbbruch ? "Spiel beendet." : erg.zeitUm ? "Zeit um." : art === "sprung" ? "Abgestürzt." : erg.grund === "grube" ? "In die Grube gefallen." : "Zusammengestoßen.";
     const el = document.createElement("div"); el.className = "spiel-ende";
-    el.innerHTML = `<div class="dialog" role="dialog" aria-label="Ergebnis"><p class="leise">${grund}</p><div class="zahl">${erg.punkte}</div><p>${r.rekord ? "Neuer Rekord!" : `Rekord: ${S.spiele[art].best}`}</p>${art === "run" ? `<p class="leise">${erg.knochen} Knochen gesammelt</p>` : `<p class="leise">${erg.linien} Reihen</p>`}
+    el.innerHTML = `<div class="dialog" role="dialog" aria-label="Ergebnis"><p class="leise">${grund}</p><div class="zahl">${erg.punkte}</div><p>${r.rekord ? "Neuer Rekord!" : `Rekord: ${S.spiele[art].best}`}</p><p class="leise">${art === "sprung" ? `${erg.hoehe} m hoch, ` : ""}${erg.knochen} Knochen gesammelt</p>
       <div class="knopfzeile" style="justify-content:center">${geht ? `<button class="btn haupt" data-act="spiel-start" data-arg="${art}">Noch mal (1 Token)</button>` : ""}<button class="btn" data-act="spielhalle">Spielhalle</button></div></div>`;
     box.appendChild(el);
     spielCtrl = null;
@@ -1003,6 +1222,8 @@
       case "probe": h = probe(); break;
       case "probe-ende": h = probeEnde(); break;
       case "auftraege": h = auftraegeSeite(); break;
+      case "erklaerung": h = erklaerungSeite(); break;
+      case "erklaerungen": h = erklaerungenSeite(); break;
       case "spielhalle": h = spielhalle(); break;
       // Ein Spiel startet nur nach dem Bezahlen mit einem Token, nie durch erneutes Zeichnen
       case "spiel": if (ui.spielNeu) h = spielSeite(); else { ui = { ansicht: "spielhalle" }; h = spielhalle(); } break;
@@ -1012,6 +1233,7 @@
     }
     if (ui.levelUp) h += `<div class="dialog-hinter"><div class="dialog levelup" role="dialog" aria-label="Level-Up"><p class="leise">Level-Up</p><div class="zahl">Level ${ui.levelUp.n}</div><p>Rang: <b>${esc(ui.levelUp.rang)}</b></p>${ui.levelUp.neu.length ? `<p>Neu freigeschaltet: ${esc(ui.levelUp.neu.join(", "))} (App-Design)</p>` : ""}<div class="knopfzeile" style="justify-content:center"><button class="btn haupt" data-act="levelup-zu">Weiter</button></div></div></div>`;
     if (ui.tor) h += `<div class="dialog-hinter"><div class="dialog" role="dialog" aria-label="Für Eltern"><h2>Für Eltern</h2><p>Halte den Knopf etwa zwei Sekunden gedrückt, bis er ganz gefüllt ist. Oder rechne:</p><p class="tor-aufgabe"><b>${ui.tor.a} × ${ui.tor.b} =</b> <input id="tor-eingabe" class="eingabe klein" inputmode="numeric" autocomplete="off" aria-label="Ergebnis"></p><div class="knopfzeile"><button class="btn haupt" data-act="tor-ok">Öffnen</button><button class="btn" data-act="tor-zu">Abbrechen</button></div></div></div>`;
+    if (ui.hilfe) h += `<div class="dialog-hinter"><div class="dialog hilfe" role="dialog" aria-label="Die 4-Move-Combo"><h2>Die 4-Move-Combo</h2><ol class="moves-liste"><li><b>÷ Teilen:</b> Wie oft passt der Divisor hinein? Die Ziffer kommt ins Ergebnis.</li><li><b>× Mal:</b> Ziffer mal Divisor, darunter schreiben.</li><li><b>− Minus:</b> abziehen. Der Rest muss kleiner als der Divisor sein.</li><li><b>↓ Runter:</b> die nächste Ziffer herunterholen. Dann wieder von vorn.</li></ol><p class="merk">🧠 Tiger malen mit Rot: Teilen, Mal, Minus, Runter.</p><p class="leise klein">Passt der Divisor nicht hinein, kommt eine 0 ins Ergebnis.</p><div class="knopfzeile" style="justify-content:center"><button class="btn haupt" data-act="hilfe-zu">Alles klar</button></div></div></div>`;
     if (ui.sicherFrage) h += `<div class="dialog-hinter"><div class="dialog" role="dialog" aria-label="Sicherung"><h2>Spielstand sichern?</h2><p>Die Sicherungsdatei kannst du in «Dateien» ablegen. Damit geht nichts verloren.</p><div class="knopfzeile"><button class="btn haupt" data-act="sicherung">Sicherung speichern</button><button class="btn" data-act="dialog-zu">Abbrechen</button></div></div></div>`;
     document.body.classList.toggle("ruhig", !!S.einst.ruhig);
     document.documentElement.setAttribute("data-theme", S.theme || "nacht");
@@ -1097,6 +1319,22 @@
       case "auftraege": gehe("auftraege"); return;
       case "auftrag-fertig": { const lv = level(); if (L.auftragErledigt(S, arg, heute())) { speichern(); pruefeLevelUp(lv); render(); ton(12); plusAnzeigen("+" + L.LOHN.auftrag); toast(`Challenge geschafft: +${L.LOHN.auftrag} Münzen und ${L.LOHN.punkteAuftrag} XP.`); } return; }
       case "karten-thema": ui.thema = arg; render(); return;
+      case "erklaerungen": gehe("erklaerungen"); return;
+      case "erkl": { const [fid, thid] = String(arg).split(":"); const zurueck = ui; zeitBuchen(); ui = { ansicht: "erklaerung", fachId: fid, thema: thid, folie: 0, check: null, zurueck }; render(); window.scrollTo(0, 0); return; }
+      case "erkl-weiter": ui.folie = (ui.folie || 0) + 1; ui.check = null; render(); window.scrollTo(0, 0); return;
+      case "erkl-zurueck": ui.folie = Math.max(0, (ui.folie || 0) - 1); ui.check = null; render(); window.scrollTo(0, 0); return;
+      case "erkl-check": {
+        const { f, th, fo } = erklAktuell(); if (!fo || !fo.check) return;
+        const C = ui.check || (ui.check = { falsch: [], ok: false });
+        const o = checkOptionen(th, fo.check)[Number(arg)];
+        if (o !== fo.check.antwort) { C.falsch.push(o); render(); return; }
+        C.ok = true;
+        const lv = level();
+        if (!C.falsch.length && L.erklaerungGeschafft(S, erklKey(f, th), heute())) { C.xp = L.LOHN.punkteErklaerung; speichern(); pruefeLevelUp(lv); konfetti(); plusAnzeigen("+" + C.xp + " XP"); }
+        ton(12); render(); return;
+      }
+      case "erkl-fertig": { const z = ui.zurueck, lu = ui.levelUp; if (z && z.ansicht !== "start" && z.ansicht !== "erklaerung") { ui = z; ui.levelUp = lu || ui.levelUp; render(); window.scrollTo(0, 0); } else { gehe("start"); if (lu) { ui.levelUp = lu; render(); } } return; }
+      case "erkl-vorlesen": { const { fo } = erklAktuell(); if (fo) sprich([fo.titel].concat(fo.text || []).concat(fo.check ? [fo.check.frage] : []).join(". ")); return; }
       case "sag": sprich(arg); return;
       case "sag-en": sprich([[arg, "en"]]); return;
       case "vorlesen": vorlesen(); return;
@@ -1143,9 +1381,25 @@
         if (i < 0) return;
         R.antwort[i] = w; R.wahl = R.antwort.indexOf(null) >= 0 ? R.antwort.indexOf(null) : null; render(); return;
       }
+      // Rechen-Werkstatt
+      case "np": {
+        const D = R && R.div; if (!D) return;
+        const m = R.task.ablauf[D.pos];
+        D.eingabe = (D.eingabe + arg).replace(/^0(?=\d)/, "").slice(0, 4);
+        if (m.typ === "ziffer") return divEingabe(D.eingabe); // eine Ziffer: sofort prüfen
+        render(); return;
+      }
+      case "np-weg": if (R && R.div) { R.div.eingabe = R.div.eingabe.slice(0, -1); render(); } return;
+      case "np-ok": if (R && R.div && R.div.eingabe) divEingabe(R.div.eingabe); return;
+      case "div-start": if (R && R.div) divEingabe(String(R.task.anfaenge[Number(arg)])); return;
+      case "div-runter": if (R && R.div) divEingabe("runter"); return;
+      case "div-hilfe": ui.hilfe = true; render(); return;
+      case "hilfe-zu": ui.hilfe = false; render(); return;
+      case "zeile": if (ui.ansicht === "probe") { R.antwort = arg; render(); return; } return pruefe(arg);
       case "pruefen": {
         const t = R.task;
         if (t.art === "schreiben" || t.art === "zahl") { const el2 = document.getElementById("eingabe"); R.antwort = el2 ? el2.value : ""; }
+        if (t.art === "ergebnis") R.antwort = ergebnisLesen();
         return pruefe(t.art === "reihe" || t.art === "luecke" ? R.antwort.slice() : t.art === "paare" ? Object.assign({}, R.antwort) : R.antwort);
       }
       // Probe
@@ -1239,7 +1493,7 @@
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Enter") return;
     const t = e.target;
-    if (t && t.id === "eingabe") { e.preventDefault(); act(ui.ansicht === "probe" ? "probe-weiter" : "pruefen"); }
+    if (t && (t.id === "eingabe" || t.id === "eingabe-rest")) { e.preventDefault(); act(ui.ansicht === "probe" ? "probe-weiter" : "pruefen"); }
     if (t && (t.id === "name")) { e.preventDefault(); act("w-name"); }
     if (t && (t.id === "tiername")) { e.preventDefault(); act("w-fertig"); }
     if (t && (t.id === "tor-eingabe")) { e.preventDefault(); act("tor-ok"); }
@@ -1259,7 +1513,20 @@
     S = L.migrate(S); speichern(); render();
   });
   // Eingabe in Schreibfeldern merken (für Neuzeichnen)
-  document.addEventListener("input", (e) => { if (e.target && e.target.id === "eingabe" && ui.runde) ui.runde.antwort = e.target.value; });
+  function ergebnisLesen() { const q = document.getElementById("eingabe"), r = document.getElementById("eingabe-rest"); return { q: q ? q.value : "", r: r ? r.value : "" }; }
+  document.addEventListener("input", (e) => {
+    if (!e.target || !ui.runde || !ui.runde.task) return;
+    if (ui.runde.task.art === "ergebnis" && (e.target.id === "eingabe" || e.target.id === "eingabe-rest")) ui.runde.antwort = ergebnisLesen();
+    else if (e.target.id === "eingabe") ui.runde.antwort = e.target.value;
+  });
+  // Tastatur in der Rechen-Werkstatt (am Computer oder mit iPad-Tastatur)
+  document.addEventListener("keydown", (e) => {
+    const R = ui.runde; if (ui.ansicht !== "runde" || !R || !R.div || e.target.tagName === "INPUT") return;
+    const m = R.task.ablauf[R.div.pos]; if (!m) return;
+    if (/^[0-9]$/.test(e.key) && m.typ !== "start" && m.typ !== "runter") { e.preventDefault(); act("np", e.key); }
+    else if (e.key === "Backspace") { e.preventDefault(); act("np-weg"); }
+    else if (e.key === "Enter") { e.preventDefault(); act(m.typ === "runter" ? "div-runter" : "np-ok"); }
+  });
 
   // ================= Offline =================
   if ("serviceWorker" in navigator && location.protocol !== "file:" && !TEST.keinSW) navigator.serviceWorker.register("sw.js").catch(() => { /* ohne Offline weiter */ });

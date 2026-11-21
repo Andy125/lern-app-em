@@ -58,9 +58,30 @@ export async function loese(page, { probe = false } = {}) {
       }
       await page.click(pruef); break;
     case "schreiben": case "zahl": await page.fill("#eingabe", String(t.loesung)); await page.click(pruef); break;
+    case "division": await loeseDivision(page); break;
+    case "ergebnis": await page.fill("#eingabe", String(t.loesung.q)); await page.fill("#eingabe-rest", t.loesung.r ? String(t.loesung.r) : ""); await page.click(pruef); break;
+    case "detektiv": await page.click(`[data-act=zeile][data-arg="${t.loesung}"]`); if (probe) await page.click(pruef); break;
     default: throw new Error("unbekannte Art " + t.art);
   }
   return t;
+}
+
+// Rechen-Werkstatt: Schritt für Schritt über den Ziffernblock, so wie ein Kind tippt
+export async function divSchritt(page) {
+  return page.evaluate(() => { const R = window.__LN.ui().runde; const m = R.task.ablauf[R.div.pos]; return { status: R.status, typ: m.typ, wert: m.wert, start: Number(R.task.div.ziffern.slice(0, R.task.div.anfang).join("")), anfaenge: R.task.anfaenge, pos: R.div.pos }; });
+}
+export async function tippeDivision(page, wert, typ, anfaenge) {
+  if (typ === "start") await page.click(`[data-act=div-start][data-arg="${anfaenge.indexOf(Number(wert))}"]`);
+  else if (typ === "runter") await page.click("[data-act=div-runter]");
+  else { for (const d of String(wert)) await page.click(`[data-act=np][data-arg="${d}"]`); if (typ !== "ziffer") await page.click("[data-act=np-ok]"); }
+}
+export async function loeseDivision(page) {
+  for (let i = 0; i < 80; i++) {
+    const z = await divSchritt(page);
+    if (z.status !== "offen" && z.status !== "tipp") return;
+    await tippeDivision(page, z.typ === "start" ? z.start : z.wert, z.typ, z.anfaenge);
+  }
+  throw new Error("Division nicht fertig geworden");
 }
 
 // Aufgabe falsch beantworten (bei Auswahl: eine falsche Option)
@@ -87,6 +108,16 @@ export async function falsch(page) {
     }
     case "schreiben": await page.fill("#eingabe", "Quatschwort"); await page.click("[data-act=pruefen]"); break;
     case "zahl": await page.fill("#eingabe", String(t.loesung + 7)); await page.click("[data-act=pruefen]"); break;
+    case "ergebnis": await page.fill("#eingabe", String(t.loesung.q + 7)); await page.click("[data-act=pruefen]"); break;
+    case "detektiv": { const z = await page.evaluate(() => [...document.querySelectorAll("[data-act=zeile]:not([disabled])")].map((b) => b.dataset.arg)); await page.click(`[data-act=zeile][data-arg="${z.find((x) => x !== t.loesung)}"]`); break; }
+    case "division": {
+      // falsch an der aktuellen Stelle
+      const z = await divSchritt(page);
+      if (z.typ === "start") await tippeDivision(page, z.anfaenge.find((a) => a !== z.start), "start", z.anfaenge);
+      else if (z.typ === "ziffer") await tippeDivision(page, (z.wert + 1) % 10, "ziffer");
+      else if (z.typ !== "runter") await tippeDivision(page, z.wert + 1, z.typ);
+      break;
+    }
   }
   return t;
 }
