@@ -1,4 +1,4 @@
-// Tests der Spiellogik: Physik von Sky Jump und Run. Ein Autopilot spielt beide viele Minuten lang:
+// Tests der Spiellogik: Physik von Sky Jump, Run und Turbo Kart. Ein Autopilot spielt beide viele Minuten lang:
 // Schafft er es, ist jede erzeugte Strecke auch für ein Kind machbar.
 // Aufruf: node tools/test-spiele.mjs
 import fs from "node:fs";
@@ -10,7 +10,7 @@ const ctx = { Math, Date, Array, Object, JSON, console };
 ctx.window = ctx; ctx.globalThis = ctx; ctx.devicePixelRatio = 1;
 vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(path.join(PUBLIC, "spiele.js"), "utf8"), ctx, { filename: "spiele.js" });
-const { SPRUNG: SP, RUN } = ctx.LN_SPIELE;
+const { SPRUNG: SP, RUN, KART } = ctx.LN_SPIELE;
 const { ok, ende } = pruefer("Spiele");
 
 const DT = 1 / 60;
@@ -163,5 +163,82 @@ for (let seed = 1; seed <= 30; seed++) {
 }
 ok(maxV === RUN.VMAX, `Tempo steigt bis zum Höchstwert (${maxV})`);
 ok(gruben > 100 && hind > 200, `genug Gruben (${gruben}) und Hindernisse (${hind}) getestet`);
+
+// ---------- Turbo Kart ----------
+{
+  const S = KART.baueStrecke(), P = S.pts, N = KART.N;
+  const stueck = P.map((p, i) => Math.hypot(P[(i + 1) % N].x - p.x, P[(i + 1) % N].y - p.y));
+  ok(Math.max(...stueck) - Math.min(...stueck) < 0.5, "Mittellinie in gleich lange Stücke geteilt");
+  ok(P.every((p) => p.x > KART.HALB + 20 && p.y > KART.HALB + 20 && p.x < KART.WELT - KART.HALB - 20 && p.y < KART.WELT - KART.HALB - 20), "Strecke liegt ganz in der Welt");
+  let eng = Infinity;
+  for (let i = 0; i < N; i++) for (let j = i + 80; j < N; j++) { if (N - (j - i) < 80) continue; eng = Math.min(eng, Math.hypot(P[i].x - P[j].x, P[i].y - P[j].y)); }
+  ok(eng > 2 * KART.HALB + 20, `Strecke berührt sich nirgends selbst (engste Stelle ${eng.toFixed(0)})`);
+  let knick = 0; for (let i = 0; i < N; i++) { let d = P[(i + 1) % N].w - P[i].w; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; knick = Math.max(knick, Math.abs(d)); }
+  // Kurvenradius der Mittellinie mindestens 40: mit der halben Straßenbreite (46) kommt man außen herum
+  const radius = (KART.strecke.laenge / N) / knick;
+  ok(radius >= 40, `keine Haarnadel, die man nicht fahren kann (engster Radius ${radius.toFixed(0)})`);
+}
+function kartPilot(s) { const f = s.spieler; f.bahn = 0; return { richtung: KART.lenkNach(f, KART.zielPunkt(f, 9 + Math.floor(f.v / 45))), item: f.item === "turbo" }; }
+{
+  const plaetze = [0, 0, 0, 0, 0], schwerPl = [0, 0, 0, 0, 0];
+  for (let seed = 1; seed <= 20; seed++) {
+    const h = KART.neu(seed, 8); while (!h.vorbei) KART.schritt(h, DT, kartPilot(h));
+    schwerPl[h.platz]++;
+    const s = KART.neu(seed, 0); let t = 0;
+    let gras = 0;
+    while (!s.vorbei && t < 200) { KART.schritt(s, DT, kartPilot(s)); t += DT; if (s.spieler.gras > 0) gras += DT; }
+    ok(gras < s.t * 0.05, `Seed ${seed}: auf der Ideallinie kaum im Gras (${gras.toFixed(1)} s)`);
+    ok(s.grund === "ziel" && s.spieler.ziel < 90, `Seed ${seed}: Autopilot fährt drei Runden ins Ziel (${s.grund}, ${s.t.toFixed(1)} s)`);
+    ok(s.fahrer.every((f) => f.fs > 1.8 * KART.N), `Seed ${seed}: alle Computer-Fahrer kommen gut voran`);
+    if (seed <= 5) {
+      const c = KART.neu(seed, 0); c.spieler.ziel = 0; // nur die Computer fahren
+      for (let i = 0; i < 100 * 60; i++) KART.schritt(c, DT, {});
+      ok(c.fahrer.every((f) => f.spieler || f.ziel != null), `Seed ${seed}: alle Computer-Fahrer kommen ins Ziel`);
+    }
+    ok(s.punkte > 0 && s.platz >= 1 && s.platz <= 4, `Seed ${seed}: Platz und Punkte`);
+    plaetze[s.platz]++;
+  }
+  ok(plaetze[1] >= 18, `am Anfang gewinnt man fehlerfrei gefahren fast immer (Plätze ${plaetze.slice(1).join("/")})`);
+  ok(schwerPl[1] > 0 && schwerPl[1] <= 14, `nach acht Siegen gewinnt man fehlerfrei gefahren nur noch manchmal (Plätze ${schwerPl.slice(1).join("/")})`);
+  // mit vielen Siegen werden die anderen schneller
+  const leicht = KART.neu(1, 0), schwer = KART.neu(1, 8);
+  ok(schwer.fahrer[0].tempo > leicht.fahrer[0].tempo && schwer.spieler.tempo === 1, "Siege machen die Computer-Fahrer schneller");
+  // Countdown: vor dem Start bewegt sich nichts
+  const c = KART.neu(2, 0), x0 = c.spieler.x; for (let i = 0; i < 120; i++) KART.schritt(c, DT, { richtung: 1 });
+  ok(c.spieler.x === x0 && c.t < 0, "während des Countdowns steht alles");
+  // Gras bremst
+  const g = KART.neu(3, 0); g.t = 0; g.spieler.v = KART.VMAX; const p = S0(g); g.spieler.x = p.x + Math.cos(p.w + Math.PI / 2) * (KART.HALB + 25); g.spieler.y = p.y + Math.sin(p.w + Math.PI / 2) * (KART.HALB + 25);
+  const g2 = KART.neu(3, 0); g2.t = 0; g2.spieler.v = KART.VMAX;
+  for (let i = 0; i < 30; i++) { KART.schritt(g, DT, {}); KART.schritt(g2, DT, {}); }
+  ok(g.spieler.gras > 0 && g.spieler.v < g2.spieler.v * 0.8, `auf dem Gras wird man langsam (${g.spieler.v.toFixed(0)} statt ${g2.spieler.v.toFixed(0)})`);
+  // Abkürzen quer übers Gras zählt nicht
+  const a = KART.neu(4, 0); a.t = 0; const fs0 = a.spieler.fs, weit = KART.strecke.pts[(a.spieler.idx + 200) % KART.N];
+  a.spieler.x = weit.x; a.spieler.y = weit.y; KART.schritt(a, DT, {});
+  ok(a.spieler.fs - fs0 < 45, "Abkürzen über die Wiese bringt keinen Fortschritt");
+  // Falschherum fahren zählt rückwärts
+  const r = KART.neu(5, 0); r.t = 0; r.spieler.w += Math.PI; const fr = r.spieler.fs;
+  for (let i = 0; i < 120; i++) KART.schritt(r, DT, { richtung: 0.001 });
+  ok(r.spieler.fs < fr, "falschherum fahren zählt rückwärts");
+  const hilfe = KART.neu(5, 0); hilfe.t = 0; hilfe.spieler.w += 1;
+  for (let i = 0; i < 90; i++) KART.schritt(hilfe, DT, {});
+  let ab = hilfe.spieler.w - KART.strecke.pts[hilfe.spieler.idx].w; while (ab > Math.PI) ab -= 2 * Math.PI; while (ab < -Math.PI) ab += 2 * Math.PI;
+  ok(Math.abs(ab) < 0.45, `Lenkhilfe: ohne Lenken dreht der Kart in Fahrtrichtung (${ab.toFixed(2)})`);
+  // Kiste gibt ein Item, Turbo macht schnell, Pfütze lässt schleudern
+  const k = KART.neu(6, 0); k.t = 0; const kiste = k.kisten[0]; k.spieler.x = kiste.x; k.spieler.y = kiste.y; k.spieler.idx = KART.strecke.kisten[0]; k.spieler.fs = k.spieler.idx; k.spieler.w = KART.strecke.pts[k.spieler.idx].w;
+  KART.schritt(k, DT, {});
+  ok(k.spieler.item === "turbo" || k.spieler.item === "pfuetze", "Fragezeichen-Kiste gibt ein Item");
+  ok(kiste.weg > k.t, "die Kiste ist kurz weg und kommt wieder");
+  k.spieler.item = "turbo"; k.spieler.v = KART.VMAX * 0.9; KART.schritt(k, DT, { item: true });
+  for (let i = 0; i < 40; i++) KART.schritt(k, DT, {});
+  ok(k.spieler.v > KART.VMAX * 1.05 && k.spieler.item == null, `Turbo macht schneller als normal (${k.spieler.v.toFixed(0)})`);
+  const m = KART.neu(7, 0); m.t = 0; const opfer = m.fahrer[0];
+  m.pfuetzen.push({ x: opfer.x + Math.cos(opfer.w) * 4, y: opfer.y + Math.sin(opfer.w) * 4, t: 0, von: m.spieler });
+  for (let i = 0; i < 10; i++) KART.schritt(m, DT, {});
+  ok(opfer.schleudern > 0 && m.pfuetzen.length === 0, "in die Pfütze gefahren: der Kart schleudert");
+  // Zeitlimit
+  const z = KART.neu(8, 0); z.t = KART.ZEITLIMIT / 1000 - 0.001; KART.schritt(z, 0.01, {});
+  ok(z.vorbei && z.zeitUm && z.punkte > 0, "nach drei Minuten: Zeit um, Punkte für den Platz");
+}
+function S0(s) { return KART.strecke.pts[s.spieler.idx]; }
 
 ende();

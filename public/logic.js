@@ -124,7 +124,10 @@
     return { ok: false, exakt: false };
   }
   function parseZahl(s) {
-    const t = String(s == null ? "" : s).trim().replace(/[\s  .']/g, "").replace(",", ".");
+    let t = String(s == null ? "" : s).trim();
+    // «1.5» mit Punkt als Komma lesen (englische Tastatur), «1.500» bleibt Tausendertrennung
+    if (/^-?\d+\.\d{1,2}$/.test(t)) t = t.replace(".", ",");
+    t = t.replace(/[\s  .']/g, "").replace(",", ".");
     if (!/^-?\d+(\.\d+)?$/.test(t)) return NaN;
     return Number(t);
   }
@@ -132,7 +135,7 @@
   // ---------- Inhalte ----------
   // Ein Fach hat Themen, ein Thema hat Karten. Aus jeder Karte entstehen ein oder mehrere Lernteile
   // (bei Bild, Paaren und Gruppen einer je Eintrag), jeder Lernteil hat einen eigenen Fortschritt.
-  const TYPEN = ["begriff", "frage", "zahl", "wahr", "paare", "gruppen", "reihe", "luecke", "bild", "vokabel", "teilen", "detektiv", "ueberschlag", "umkehr", "kopf", "sach", "passt"];
+  const TYPEN = ["begriff", "frage", "zahl", "wahr", "paare", "gruppen", "reihe", "luecke", "bild", "vokabel", "teilen", "detektiv", "ueberschlag", "umkehr", "kopf", "sach", "passt", "linie", "lage", "welche", "abstand"];
   function fachTeile(fach) {
     if (fach.__teile) return fach.__teile;
     const teile = [];
@@ -196,6 +199,11 @@
       case "kopf": return ["kopf"];
       case "sach": return ["sach"];
       case "passt": return ["passt-wahl", "passt-zahl"];
+      // Geometrie: Bilder auf Karopapier, jedes Mal neu gezeichnet
+      case "linie": return k.zaehlen ? ["linie-wahl", "linie-zaehlen"] : ["linie-wahl"];
+      case "lage": return ["lage-wahl"];
+      case "welche": return ["welche-wahl"];
+      case "abstand": return k.art === "parallel" ? ["abstand-parallel"] : ["abstand-wahl", "abstand-zahl"];
     }
     return [];
   }
@@ -377,6 +385,83 @@
     }
     return { a: 84, b: 4, q: 21, rest: 0 };
   }
+
+  // ---------- Geometrie auf Karopapier ----------
+  // Ein Kästchen im Heft ist 5 mm breit. Linien haben einen Punkt (x, y) in Kästchen und eine Richtung (dx, dy)
+  // aus ganzen Zahlen, so kann man senkrecht und parallel durch Kästchenzählen prüfen. y zählt nach unten.
+  const GEO = { C: 16, Z: 10, K: 24, RAND: 14 };
+  const RICHTUNGEN = {
+    achsen: [[1, 0], [0, 1]],
+    diagonal: [[1, 0], [0, 1], [1, 1], [1, -1]],
+    schraeg: [[1, 0], [0, 1], [1, 1], [1, -1], [2, 1], [1, 2], [2, -1], [1, -2], [3, 1], [1, 3], [3, -1], [1, -3]],
+  };
+  const skalar = (a, b) => a[0] * b[0] + a[1] * b[1];
+  const kreuz = (a, b) => a[0] * b[1] - a[1] * b[0];
+  const laenge = (a) => Math.sqrt(skalar(a, a));
+  // Lage zweier Richtungen: "senkrecht", "parallel" oder "schraeg" (dazwischen, deutlich sichtbar)
+  function lageVon(a, b) { if (skalar(a, b) === 0) return "senkrecht"; if (kreuz(a, b) === 0) return "parallel"; return "schraeg"; }
+  const deutlichSchraeg = (a, b) => { const c = Math.abs(skalar(a, b)) / (laenge(a) * laenge(b)); return c > 0.42 && c < 0.92; };
+  // Teil einer Geraden im Bild: Parameterbereich, in dem sie innerhalb des Rands bleibt
+  function imBild(p, d) {
+    let lo = -1e9, hi = 1e9;
+    const grenzen = [[0, GEO.C], [0, GEO.Z]];
+    for (let i = 0; i < 2; i++) {
+      const [u, o] = grenzen[i];
+      if (d[i] === 0) { if (p[i] < u || p[i] > o) return null; continue; }
+      let t1 = (u - p[i]) / d[i], t2 = (o - p[i]) / d[i]; if (t1 > t2) { const x = t1; t1 = t2; t2 = x; }
+      lo = Math.max(lo, t1); hi = Math.min(hi, t2);
+    }
+    return lo < hi ? [lo, hi] : null;
+  }
+  const px = (v) => GEO.RAND + v * GEO.K;
+  function geoSvg(linien, punkte, extra) {
+    const W = GEO.C * GEO.K + 2 * GEO.RAND, H = GEO.Z * GEO.K + 2 * GEO.RAND;
+    let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Zeichnung auf Karopapier"><rect width="${W}" height="${H}" fill="#fffdf8"/>`;
+    for (let x = 0; x <= GEO.C; x++) s += `<line x1="${px(x)}" y1="${px(0)}" x2="${px(x)}" y2="${px(GEO.Z)}" stroke="#e6e0f6" stroke-width="1"/>`;
+    for (let y = 0; y <= GEO.Z; y++) s += `<line x1="${px(0)}" y1="${px(y)}" x2="${px(GEO.C)}" y2="${px(y)}" stroke="#e6e0f6" stroke-width="1"/>`;
+    for (const l of linien) {
+      const [a, b] = l.von;
+      s += `<line x1="${px(a[0])}" y1="${px(a[1])}" x2="${px(b[0])}" y2="${px(b[1])}" stroke="${l.farbe || "#2b2550"}" stroke-width="${l.dick || 3}" stroke-linecap="round"${l.gestrichelt ? ' stroke-dasharray="7 6"' : ""}/>`;
+      if (l.name) s += `<text x="${px(l.schild[0])}" y="${px(l.schild[1]) + 6}" text-anchor="middle" font-size="19" font-style="italic" font-weight="700" fill="${l.farbe || "#2b2550"}" font-family="Georgia, serif">${l.name}</text>`;
+    }
+    for (const pt of punkte || []) {
+      const x = px(pt.x), y = px(pt.y);
+      s += `<path d="M${x - 6} ${y - 6} L${x + 6} ${y + 6} M${x - 6} ${y + 6} L${x + 6} ${y - 6}" stroke="#e5662a" stroke-width="3" stroke-linecap="round"/>`;
+      s += `<text x="${x + (pt.dx || 9)}" y="${y + (pt.dy || -9)}" font-size="18" font-weight="700" fill="#e5662a" font-family="Sora, system-ui, sans-serif">${pt.name}</text>`;
+    }
+    return s + (extra || "") + "</svg>";
+  }
+  // Ganze Gerade durchs Bild, Name am Ende, das weiter rechts unten liegt; Punkt p soll im Inneren liegen
+  function gerade(p, d, name, farbe) {
+    const b = imBild(p, d); if (!b) return null;
+    const a = [p[0] + d[0] * b[0], p[1] + d[1] * b[0]], e = [p[0] + d[0] * b[1], p[1] + d[1] * b[1]];
+    if (laenge([e[0] - a[0], e[1] - a[1]]) < 5) return null;
+    const ende = e[0] + e[1] >= a[0] + a[1] ? e : a, innen = ende === e ? a : e;
+    const r = [innen[0] - ende[0], innen[1] - ende[1]], lr = laenge(r);
+    const schild = [ende[0] + (r[0] / lr) * 0.9 + (-r[1] / lr) * 0.55, ende[1] + (r[1] / lr) * 0.9 + (r[0] / lr) * 0.55];
+    return { p, d, von: [a, e], name, farbe, schild };
+  }
+  function innenPunkt(r, rand) { return [r.int(rand, GEO.C - rand), r.int(rand, GEO.Z - rand)]; }
+  // Zwei Geraden mit vorgegebener Lage; bei senkrecht und schräg schneiden sie sich gut sichtbar im Bild
+  function zweiGeraden(r, k, lage) {
+    const R0 = RICHTUNGEN[k.richtungen || "schraeg"];
+    for (let v = 0; v < 500; v++) {
+      const a = R0[Math.floor(r.f() * R0.length)];
+      let b;
+      if (lage === "senkrecht") b = r.f() < 0.5 ? [-a[1], a[0]] : [a[1], -a[0]];
+      else if (lage === "parallel") b = a.slice();
+      else { const kand = RICHTUNGEN.schraeg.filter((x) => deutlichSchraeg(a, x)); if (!kand.length) continue; b = kand[Math.floor(r.f() * kand.length)]; }
+      const p = innenPunkt(r, 3);
+      let q = p;
+      if (lage === "parallel") { const n = [-a[1], a[0]], schritt = r.int(2, 4) * (r.f() < 0.5 ? -1 : 1); q = [p[0] + n[0] * schritt / Math.max(1, Math.abs(n[0]) + Math.abs(n[1]) - 1), p[1] + n[1] * schritt / Math.max(1, Math.abs(n[0]) + Math.abs(n[1]) - 1)]; q = [Math.round(q[0]), Math.round(q[1])]; if (kreuz(a, [q[0] - p[0], q[1] - p[1]]) === 0) continue; }
+      const g = gerade(p, a, "g", "#4b3fb0"), h = gerade(q, b, "h", "#0f9c7e");
+      if (!g || !h || Math.hypot(g.schild[0] - h.schild[0], g.schild[1] - h.schild[1]) < 1.6) continue;
+      if (lage === "parallel" && abstandPunktGerade(q, p, a) < 1.4) continue;
+      return [g, h];
+    }
+    return null;
+  }
+  function abstandPunktGerade(q, p, d) { return Math.abs(kreuz(d, [q[0] - p[0], q[1] - p[1]])) / laenge(d); }
 
   // ---------- Aufgaben erzeugen ----------
   function optionenMit(r, richtig, kandidaten, n) {
@@ -605,6 +690,148 @@
         t.tipp = t.tipp || "Welche Zahl wird geteilt, und durch welche? Schreib die Rechnung zuerst auf.";
         break;
       }
+      // ----- Geometrie -----
+      case "linie-wahl": {
+        // Eine Linie durch A und B: Strecke (endet an A und B), Strahl (beginnt bei A, läuft über B hinaus) oder Gerade
+        const typen = ["Strecke", "Strahl", "Gerade"], typ = typen[Math.floor(r.f() * 3)];
+        let L0 = null, A, B, d;
+        for (let v = 0; v < 300 && !L0; v++) {
+          const R0 = RICHTUNGEN[k.richtungen || "schraeg"]; d = R0[Math.floor(r.f() * R0.length)].slice(); if (r.f() < 0.5) d = [-d[0], -d[1]];
+          const n = r.int(2, 3); A = innenPunkt(r, 3); B = [A[0] + d[0] * n, A[1] + d[1] * n];
+          if (B[0] < 2 || B[0] > GEO.C - 2 || B[1] < 2 || B[1] > GEO.Z - 2) continue;
+          const g = gerade(A, d); if (!g) continue;
+          const bb = imBild(A, d);
+          if (typ === "Strecke") L0 = { von: [A, B] };
+          else if (typ === "Strahl") { if (bb[1] < n + 1.5) continue; L0 = { von: [A, [A[0] + d[0] * bb[1], A[1] + d[1] * bb[1]]] }; }
+          else { if (bb[1] < n + 1.5 || bb[0] > -1.5) continue; L0 = { von: g.von }; }
+        }
+        Object.assign(t, { art: "wahl", frage: "Was siehst du hier?", text: "", optionen: typen.map((x) => x + " AB"), loesung: typ + " AB", geo: { typ, A, B, von: L0.von } });
+        t.bild = geoSvg([L0], [{ x: A[0], y: A[1], name: "A" }, { x: B[0], y: B[1], name: "B" }]);
+        t.erklaerung = typ === "Strecke" ? "Die Linie hört bei A und bei B auf. Sie hat zwei Endpunkte, also ist es eine Strecke. Eine Strecke kann man messen." : typ === "Strahl" ? "Die Linie beginnt bei A und läuft über B hinaus bis zum Rand und darüber weiter. Ein Anfangspunkt, kein Ende: ein Strahl." : "Die Linie läuft in beide Richtungen über A und B hinaus. Kein Anfang, kein Ende: eine Gerade.";
+        t.tipp = t.tipp || "Schau auf die Enden: Hört die Linie bei A oder B auf, oder läuft sie bis zum Rand weiter?";
+        break;
+      }
+      case "linie-zaehlen": {
+        // Mehrere Linien, gefragt ist eine Sorte: Wie viele Strecken (Strahlen, Geraden) siehst du?
+        const typen = ["Strecke", "Strahl", "Gerade"], frageTyp = typen[Math.floor(r.f() * 3)];
+        const linien = [], punkte = [], namen = "ABCDEFGHIJKL"; let ni = 0, belegt = [];
+        const frei = (P) => belegt.every((Q) => Math.hypot(P[0] - Q[0], P[1] - Q[1]) > 2.2);
+        const anzahl = r.int(4, 6);
+        for (let v = 0; v < 600 && linien.length < anzahl; v++) {
+          const typ = typen[Math.floor(r.f() * 3)];
+          if (typ === "Gerade" && linien.filter((x) => x.typ === "Gerade").length >= 2) continue;
+          const d = RICHTUNGEN.diagonal[Math.floor(r.f() * 4)].slice(); if (r.f() < 0.5) { d[0] = -d[0]; d[1] = -d[1]; }
+          const A = innenPunkt(r, 1), n = r.int(2, 4), B = [A[0] + d[0] * n, A[1] + d[1] * n];
+          if (B[0] < 1 || B[0] > GEO.C - 1 || B[1] < 1 || B[1] > GEO.Z - 1 || !frei(A) || !frei(B)) continue;
+          const bb = imBild(A, d); let von;
+          if (typ === "Strecke") von = [A, B];
+          else if (typ === "Strahl") { if (bb[1] < n + 1) continue; von = [A, [A[0] + d[0] * bb[1], A[1] + d[1] * bb[1]]]; }
+          else { if (bb[0] > -1 || bb[1] < n + 1) continue; von = [[A[0] + d[0] * bb[0], A[1] + d[1] * bb[0]], [A[0] + d[0] * bb[1], A[1] + d[1] * bb[1]]]; }
+          // Linien dürfen sich nicht überdecken (gleiche Richtung auf derselben Geraden)
+          if (linien.some((x) => kreuz(x.d, d) === 0 && kreuz(x.d, [A[0] - x.A[0], A[1] - x.A[1]]) === 0)) continue;
+          // keine Linie läuft durch einen fremden Punkt, und keine fremde Linie durch die neuen Punkte
+          const nahAnStueck = (P, von) => { const a = von[0], b = von[1], v = [b[0] - a[0], b[1] - a[1]], L2 = skalar(v, v); const t0 = Math.max(0, Math.min(1, ((P[0] - a[0]) * v[0] + (P[1] - a[1]) * v[1]) / L2)); return Math.hypot(a[0] + v[0] * t0 - P[0], a[1] + v[1] * t0 - P[1]) < 0.8; };
+          if (belegt.some((P) => nahAnStueck(P, von)) || linien.some((x) => nahAnStueck(A, x.von) || nahAnStueck(B, x.von))) continue;
+          linien.push({ typ, d, A, von, farbe: "#2b2550" });
+          punkte.push({ x: A[0], y: A[1], name: namen[ni++] }, { x: B[0], y: B[1], name: namen[ni++] });
+          belegt.push(A, B);
+        }
+        const zahl = linien.filter((x) => x.typ === frageTyp).length;
+        const mehrzahl = { Strecke: "Strecken", Strahl: "Strahlen", Gerade: "Geraden" }[frageTyp];
+        Object.assign(t, { art: "zahl", frage: `Wie viele ${mehrzahl} siehst du?`, text: "", loesung: zahl, einheit: "", toleranz: 0, geo: { frageTyp, linien: linien.map((x) => ({ typ: x.typ, von: x.von })) } });
+        t.bild = geoSvg(linien, punkte);
+        t.erklaerung = `Es sind ${zahl} ${zahl === 1 ? frageTyp : mehrzahl}. ` + { Strecke: "Strecken hören an beiden Punkten auf.", Strahl: "Strahlen beginnen an einem Punkt und laufen am anderen vorbei bis zum Rand.", Gerade: "Geraden laufen an beiden Enden bis zum Rand." }[frageTyp];
+        t.tipp = t.tipp || "Fahr jede Linie mit dem Finger ab und schau auf ihre Enden.";
+        break;
+      }
+      case "lage-wahl": {
+        const lagen = k.lagen || ["senkrecht", "parallel", "schraeg"];
+        const lage = lagen[Math.floor(r.f() * lagen.length)];
+        const gh = zweiGeraden(r, k, lage) || zweiGeraden(R(3), { richtungen: "achsen" }, lage);
+        const opts = { senkrecht: "g ⊥ h (senkrecht)", parallel: "g ∥ h (parallel)", schraeg: "weder noch" };
+        Object.assign(t, { art: "wahl", frage: "Wie liegen die Geraden g und h zueinander?", text: "", optionen: ["senkrecht", "parallel", "schraeg"].map((x) => opts[x]), loesung: opts[lage], geo: { lage, linien: gh.map((x) => ({ p: x.p, d: x.d, name: x.name })) } });
+        t.bild = geoSvg(gh);
+        const [a, b] = [gh[0].d, gh[1].d];
+        const treppe = (d) => `${Math.abs(d[0])} ${Math.abs(d[0]) === 1 ? "Kästchen" : "Kästchen"} zur Seite und ${Math.abs(d[1])} ${d[1] > 0 ? "nach unten" : d[1] < 0 ? "nach oben" : "hoch oder runter"}`;
+        t.erklaerung = lage === "senkrecht" ? `g und h bilden einen rechten Winkel (90°). Man schreibt g ⊥ h.` + (a[0] && a[1] ? ` Mit Kästchen: g geht ${treppe(a)}, h geht ${treppe(b)}, die Zahlen sind vertauscht.` : "") : lage === "parallel" ? "g und h haben überall den gleichen Abstand und schneiden sich nie, auch nicht weit außerhalb des Bilds. Man schreibt g ∥ h." : "g und h schneiden sich, aber nicht im rechten Winkel. Sie sind weder senkrecht noch parallel.";
+        t.tipp = t.tipp || "Leg in Gedanken dein Geodreieck an: Passt die Mittellinie auf g und h auf die Linie am Rand, sind sie senkrecht. Bleibt der Abstand gleich, sind sie parallel.";
+        break;
+      }
+      case "welche-wahl": {
+        // g und vier weitere Geraden a bis d: genau eine ist senkrecht (oder parallel) zu g
+        const nach = k.frage === "parallel" || (k.frage !== "senkrecht" && r.f() < 0.5) ? "parallel" : "senkrecht";
+        let fertig = null;
+        for (let v = 0; v < 400 && !fertig; v++) {
+          const R0 = RICHTUNGEN[k.richtungen || "schraeg"], dg = R0[Math.floor(r.f() * R0.length)];
+          const g = gerade(innenPunkt(r, 3), dg, "g", "#4b3fb0"); if (!g) continue;
+          const namen = ["a", "b", "c", "d"], richtig = Math.floor(r.f() * 4), liste = [g]; let ok = true;
+          for (let i = 0; i < 4 && ok; i++) {
+            let d;
+            if (i === richtig) d = nach === "senkrecht" ? [-dg[1], dg[0]] : dg.slice();
+            else { const kand = RICHTUNGEN.schraeg.filter((x) => lageVon(dg, x) !== nach && (lageVon(dg, x) !== "schraeg" || deutlichSchraeg(dg, x))); d = kand[Math.floor(r.f() * kand.length)]; }
+            let l = null;
+            for (let w = 0; w < 60 && !l; w++) {
+              const kand = gerade(innenPunkt(r, 2), d, namen[i]);
+              if (!kand) continue;
+              if (liste.some((x) => Math.hypot(x.schild[0] - kand.schild[0], x.schild[1] - kand.schild[1]) < 1.8 || (kreuz(x.d, d) === 0 && abstandPunktGerade(kand.p, x.p, x.d) < 1.2))) continue;
+              l = kand;
+            }
+            if (!l) ok = false; else liste.push(l);
+          }
+          if (ok) fertig = { liste, richtig: namen[richtig] };
+        }
+        const zeichen = nach === "senkrecht" ? "⊥" : "∥";
+        Object.assign(t, { art: "wahl", frage: `Welche Gerade ist ${nach} zu g?`, text: "", optionen: ["a", "b", "c", "d"], loesung: fertig.richtig, geo: { nach, linien: fertig.liste.map((x) => ({ p: x.p, d: x.d, name: x.name })) } });
+        t.bild = geoSvg(fertig.liste);
+        t.erklaerung = `Es ist ${fertig.richtig}, man schreibt ${fertig.richtig} ${zeichen} g. ` + (nach === "senkrecht" ? "Sie bildet mit g einen rechten Winkel." : "Sie läuft in die gleiche Richtung wie g und behält überall den gleichen Abstand.");
+        t.tipp = t.tipp || (nach === "senkrecht" ? "Gesucht ist ein rechter Winkel. Zähl die Kästchen: Geht g 2 rüber und 1 hoch, geht die Senkrechte 1 rüber und 2 runter." : "Gesucht ist die gleiche Richtung. Zähl bei jeder Geraden die Kästchen-Treppe.");
+        break;
+      }
+      case "abstand-wahl": case "abstand-zahl": case "abstand-parallel": {
+        // Achsenparallele Geraden, damit man den Abstand in Kästchen abzählen kann (1 Kästchen = 0,5 cm)
+        const waag = r.f() < 0.5, d = waag ? [1, 0] : [0, 1];
+        const lang = waag ? GEO.Z : GEO.C;
+        const lage = modus === "abstand-wahl" ? (r.f() < 0.5 ? r.int(1, 2) : lang - r.int(1, 2)) : r.int(2, lang - 2);
+        const p = waag ? [0, lage] : [lage, 0];
+        const g = gerade(p, d, "g", "#4b3fb0");
+        let kaestchen, linien = [g], punkte = [], extra = "", loesung, opts;
+        if (modus === "abstand-parallel") {
+          const moegl = []; for (let x = 1; x < lang; x++) if (Math.abs(x - lage) >= 2 && Math.abs(x - lage) <= 7) moegl.push(x);
+          const x2 = moegl[Math.floor(r.f() * moegl.length)]; kaestchen = Math.abs(x2 - lage);
+          linien.push(gerade(waag ? [0, x2] : [x2, 0], d, "h", "#0f9c7e"));
+          loesung = kaestchen / 2;
+        } else {
+          const moegl = []; for (let x = 1; x < lang; x++) if (Math.abs(x - lage) >= (modus === "abstand-wahl" ? 4 : 2) && Math.abs(x - lage) <= 7) moegl.push(x);
+          const quer = moegl[Math.floor(r.f() * moegl.length)], entlang = r.int(4, (waag ? GEO.C : GEO.Z) - 4);
+          kaestchen = Math.abs(quer - lage);
+          const P = waag ? [entlang, quer] : [quer, entlang], F = waag ? [entlang, lage] : [lage, entlang];
+          punkte.push({ x: P[0], y: P[1], name: "P" });
+          if (modus === "abstand-wahl") {
+            // drei gestrichelte Wege von P zu g, nur einer steht senkrecht auf g
+            const versatz = [0, r.int(3, 4), -r.int(3, 4)];
+            const ziele = r.shuffle(versatz).map((v2, i) => ({ v: v2, nr: String(i + 1) }));
+            for (const z of ziele) {
+              const Q = waag ? [F[0] + z.v, F[1]] : [F[0], F[1] + z.v];
+              linien.push({ von: [P, Q], farbe: "#e5662a", gestrichelt: true, dick: 2.5 });
+              const M = [P[0] + (Q[0] - P[0]) * 0.62, P[1] + (Q[1] - P[1]) * 0.62];
+              extra += `<circle cx="${px(M[0])}" cy="${px(M[1])}" r="11" fill="#fff" stroke="#e5662a" stroke-width="2"/><text x="${px(M[0])}" y="${px(M[1]) + 5}" text-anchor="middle" font-size="14" font-weight="700" fill="#e5662a" font-family="Sora, system-ui, sans-serif">${z.nr}</text>`;
+            }
+            loesung = ziele.find((z) => z.v === 0).nr; opts = ["1", "2", "3"];
+          } else loesung = kaestchen / 2;
+        }
+        const cm = (x) => String(x).replace(".", ",") + " cm";
+        if (modus === "abstand-wahl") {
+          Object.assign(t, { art: "wahl", frage: "Welcher Weg zeigt den Abstand von P zur Geraden g?", text: "", optionen: opts, loesung, geo: { waag, lage, punkt: punkte[0], linien: linien.slice(1).map((x) => x.von) } });
+          t.erklaerung = `Weg ${loesung} steht senkrecht auf g. Das ist der kürzeste Weg von P zu g, und genau den nennt man Abstand.`;
+          t.tipp = t.tipp || "Der Abstand ist immer der kürzeste Weg. Welcher Weg bildet mit g einen rechten Winkel?";
+        } else {
+          Object.assign(t, { art: "zahl", frage: modus === "abstand-parallel" ? "Wie groß ist der Abstand der Parallelen g und h?" : "Wie groß ist der Abstand von P zur Geraden g?", text: "Ein Kästchen ist 0,5 cm breit.", loesung, einheit: "cm", toleranz: 0, geo: { waag, lage, kaestchen, punkt: punkte[0] || null, h: modus === "abstand-parallel" ? linien[1].p : null } });
+          t.erklaerung = `${kaestchen} Kästchen senkrecht ${modus === "abstand-parallel" ? "von g bis h" : "von P bis g"}, das sind ${kaestchen} · 0,5 cm = ${cm(loesung)}.`;
+          t.tipp = t.tipp || "Zähl die Kästchen auf dem kürzesten Weg, also senkrecht zur Geraden. Zwei Kästchen sind 1 cm.";
+        }
+        t.bild = geoSvg(linien, punkte, extra);
+        break;
+      }
       // Der knifflige Teil beim zweistelligen Divisor: Wie oft passt er hinein?
       case "passt-wahl": case "passt-zahl": {
         const [d1, d2] = bereich(k.divisor || [11, 49]);
@@ -620,7 +847,7 @@
       default: return null;
     }
     if (!t.tipp) t.tipp = standardTipp(t);
-    if (["teilen", "detektiv", "ueberschlag", "umkehr", "kopf", "sach", "passt"].indexOf(k.typ) >= 0) t.neueZahlen = true; // jede Wiederholung mit neuen Zahlen
+    if (["teilen", "detektiv", "ueberschlag", "umkehr", "kopf", "sach", "passt", "linie", "lage", "welche", "abstand"].indexOf(k.typ) >= 0) t.neueZahlen = true; // jede Wiederholung mit neuen Zahlen
     return t;
   }
   function standardTipp(t) {
@@ -698,10 +925,12 @@
       hund: "", // Name des echten Hundes zu Hause, nur für die Warum-Texte
       auftraege: {}, // auftragId -> Datum, an dem er geschafft wurde
       gesehen: {}, // themaId -> Datum, an dem die Erklärung mit dem Check geschafft wurde
+      freunde: {}, // freundId -> { seit, herzen (0 bis 5), tag (letzter Tag mit Herz) }
+      besuch: "", // welcher Freund gerade zu Besuch ist
       muenzen: 0,
       punkte: 0, // XP
       tokens: 0, // Spiel-Tokens für die Spielhalle
-      spiele: { run: { best: 0, runden: 0 }, sprung: { best: 0, runden: 0 }, bloecke: { best: 0, runden: 0 } }, // bloecke: altes Spiel, bleibt für alte Stände
+      spiele: { run: { best: 0, runden: 0 }, sprung: { best: 0, runden: 0 }, kart: { best: 0, runden: 0, siege: 0 }, bloecke: { best: 0, runden: 0 } }, // bloecke: altes Spiel, bleibt für alte Stände
       theme: "nacht",
       gefuettert: 0,
       besitz: [], // gekaufte Dinge (Zubehör und Zimmer)
@@ -729,10 +958,12 @@
     if (typeof raw.hund === "string") s.hund = raw.hund.slice(0, 30);
     if (istObj(raw.auftraege)) for (const id of Object.keys(raw.auftraege)) if (gueltigesDatum(raw.auftraege[id])) s.auftraege[id] = raw.auftraege[id];
     if (istObj(raw.gesehen)) for (const id of Object.keys(raw.gesehen)) if (gueltigesDatum(raw.gesehen[id])) s.gesehen[id] = raw.gesehen[id];
+    if (istObj(raw.freunde)) for (const id of Object.keys(raw.freunde)) { const x = raw.freunde[id]; if (freund(id) && istObj(x) && gueltigesDatum(x.seit)) s.freunde[id] = { seit: x.seit, herzen: Math.floor(zahl(x.herzen, 0, 0, 5)), tag: gueltigesDatum(x.tag) ? x.tag : "" }; }
+    if (typeof raw.besuch === "string" && s.freunde[raw.besuch]) s.besuch = raw.besuch;
     s.muenzen = Math.floor(zahl(raw.muenzen, 0, 0));
     s.punkte = Math.floor(zahl(raw.punkte, 0, 0));
     s.tokens = Math.floor(zahl(raw.tokens, 0, 0, 99));
-    if (istObj(raw.spiele)) for (const a of ["run", "sprung", "bloecke"]) if (istObj(raw.spiele[a])) s.spiele[a] = { best: Math.floor(zahl(raw.spiele[a].best, 0, 0)), runden: Math.floor(zahl(raw.spiele[a].runden, 0, 0)) };
+    if (istObj(raw.spiele)) for (const a of ["run", "sprung", "kart", "bloecke"]) if (istObj(raw.spiele[a])) { s.spiele[a] = { best: Math.floor(zahl(raw.spiele[a].best, 0, 0)), runden: Math.floor(zahl(raw.spiele[a].runden, 0, 0)) }; if (a === "kart") s.spiele.kart.siege = Math.floor(zahl(raw.spiele.kart.siege, 0, 0)); }
     if (typeof raw.theme === "string" && THEMES.some((t) => t.id === raw.theme)) s.theme = raw.theme;
     s.gefuettert = Math.floor(zahl(raw.gefuettert, 0, 0));
     if (Array.isArray(raw.besitz)) s.besitz = [...new Set(raw.besitz.filter((x) => typeof x === "string"))];
@@ -915,25 +1146,37 @@
       { id: "kaese", name: "Käse", icon: "🧀", preis: 6 },
       { id: "kuchen", name: "Kuchen", icon: "🍰", preis: 10 },
     ],
+    // Outfit: «platz» sorgt dafür, dass nur ein Ding pro Stelle getragen wird (eine Mütze, ein Oberteil …).
+    // «bed»: zusätzlich zu den Münzen muss etwas geschafft sein.
     zubehoer: [
-      { id: "schleife", name: "Schleife", icon: "🎀", preis: 15 },
-      { id: "halstuch", name: "Halstuch", icon: "🧣", preis: 20 },
-      { id: "brille", name: "Brille", icon: "👓", preis: 25 },
-      { id: "muetze", name: "Mütze", icon: "🧢", preis: 30 },
-      { id: "blume", name: "Blume", icon: "🌼", preis: 20 },
-      { id: "krone", name: "Krone", icon: "👑", preis: 60 },
-      { id: "halsband", name: "Halsband", icon: "🔵", preis: 15 },
+      { id: "halsband", name: "Halsband", icon: "🔵", preis: 30, platz: "halsband" },
+      { id: "schleife", name: "Schleife", icon: "🎀", preis: 40, platz: "schmuck" },
+      { id: "blume", name: "Blume", icon: "🌼", preis: 45, platz: "schmuck" },
+      { id: "halstuch", name: "Halstuch", icon: "🧣", preis: 60, platz: "hals" },
+      { id: "brille", name: "Brille", icon: "👓", preis: 75, platz: "augen" },
+      { id: "muetze", name: "Mütze", icon: "🧢", preis: 90, platz: "kopf" },
+      { id: "fliege", name: "Fliege", icon: "🎀", preis: 100, platz: "hals" },
+      { id: "partyhut", name: "Partyhut", icon: "🎉", preis: 120, platz: "kopf" },
+      { id: "sonnenbrille", name: "Sonnenbrille", icon: "🕶️", preis: 140, platz: "augen" },
+      { id: "weihnachtsmuetze", name: "Weihnachtsmütze", icon: "🎅", preis: 160, platz: "kopf" },
+      { id: "pulli", name: "Ringelpulli", icon: "👕", preis: 180, platz: "koerper" },
+      { id: "kopfhoerer", name: "Kopfhörer", icon: "🎧", preis: 220, platz: "ohren" },
+      { id: "regenmantel", name: "Regenmantel", icon: "☂️", preis: 240, platz: "koerper" },
+      { id: "hoodie", name: "Hoodie", icon: "🧥", preis: 280, platz: "koerper" },
+      { id: "pfotenschuhe", name: "Pfotenschuhe", icon: "👟", preis: 320, platz: "pfoten" },
+      { id: "krone", name: "Krone", icon: "👑", preis: 450, platz: "kopf", bed: { art: "level", wert: 8 } },
+      { id: "medaille", name: "Goldmedaille", icon: "🏅", preis: 500, platz: "orden", bed: { art: "probe", wert: 100 } },
     ],
     zimmer: [
       { id: "kissen", name: "Kuschelkissen", icon: "🛏️", preis: 20 },
-      { id: "teppich", name: "Teppich", icon: "🔮", preis: 25 },
-      { id: "pflanze", name: "Pflanze", icon: "🌿", preis: 15 },
-      { id: "lampe", name: "Lampe", icon: "💡", preis: 30 },
-      { id: "bild", name: "Bild", icon: "🖼️", preis: 20 },
-      { id: "ball", name: "Ball", icon: "⚽", preis: 10 },
+      { id: "teppich", name: "Teppich", icon: "🔮", preis: 110 },
+      { id: "pflanze", name: "Pflanze", icon: "🌿", preis: 60 },
+      { id: "lampe", name: "Stehlampe", icon: "💡", preis: 130 },
+      { id: "bild", name: "Bild", icon: "🖼️", preis: 90 },
+      { id: "ball", name: "Ball", icon: "⚽", preis: 25 },
       { id: "bastel", name: "Bastelecke", icon: "🎨", preis: 30 },
       { id: "regal", name: "Bücherregal", icon: "📚", preis: 35 },
-      { id: "lichter", name: "Lichterkette", icon: "✨", preis: 40 },
+      { id: "lichter", name: "Lichterkette", icon: "✨", preis: 160 },
     ],
     // Für den Hund: nur Hundefutter und Hundesachen
     hund: {
@@ -946,18 +1189,112 @@
         { id: "kaustange", name: "Kaustange", icon: "🥢", preis: 7 },
       ],
       zimmer: [
-        { id: "napf", name: "Futter- und Wassernapf", icon: "🥣", preis: 15 },
-        { id: "decke", name: "Hundedecke", icon: "🛏️", preis: 20 },
-        { id: "korb", name: "Hundekorb", icon: "🧺", preis: 30 },
-        { id: "ball", name: "Ball", icon: "⚽", preis: 10 },
-        { id: "kauseil", name: "Kauseil", icon: "➰", preis: 12 },
-        { id: "ente", name: "Quietsche-Ente", icon: "🐤", preis: 12 },
-        { id: "frisbee", name: "Frisbee", icon: "🥏", preis: 15 },
-        { id: "kuscheltier", name: "Kuscheltier", icon: "🧸", preis: 18 },
-        { id: "leine", name: "Leine am Haken", icon: "🔗", preis: 10 },
+        { id: "napf", name: "Futter- und Wassernapf", icon: "🥣", preis: 30 },
+        { id: "ball", name: "Ball", icon: "⚽", preis: 25 },
+        { id: "kauseil", name: "Kauseil", icon: "➰", preis: 30 },
+        { id: "ente", name: "Quietsche-Ente", icon: "🐤", preis: 35 },
+        { id: "leine", name: "Leine am Haken", icon: "🔗", preis: 40 },
+        { id: "frisbee", name: "Frisbee", icon: "🥏", preis: 45 },
+        { id: "pflanze", name: "Pflanze", icon: "🌿", preis: 60 },
+        { id: "kuscheltier", name: "Kuscheltier", icon: "🧸", preis: 60 },
+        { id: "decke", name: "Hundedecke", icon: "🛏️", preis: 70 },
+        { id: "bild", name: "Bild", icon: "🖼️", preis: 90 },
+        { id: "leckerliglas", name: "Leckerli-Glas", icon: "🍯", preis: 100 },
+        { id: "teppich", name: "Teppich", icon: "🔮", preis: 110 },
+        { id: "korb", name: "Hundekorb", icon: "🧺", preis: 120 },
+        { id: "lampe", name: "Stehlampe", icon: "💡", preis: 130 },
+        { id: "vorhang", name: "Vorhänge", icon: "🎪", preis: 140 },
+        { id: "lichter", name: "Lichterkette", icon: "✨", preis: 160 },
+        { id: "fotowand", name: "Fotowand mit Freunden", icon: "📸", preis: 200, bed: { art: "freunde", wert: 3 } },
+        { id: "tipi", name: "Kuschel-Tipi", icon: "⛺", preis: 280 },
+        { id: "sofa", name: "Hundesofa", icon: "🛋️", preis: 380 },
+        { id: "pokal", name: "Pokal", icon: "🏆", preis: 500, bed: { art: "missionen", wert: 20 } },
       ],
     },
   };
+  // Hundefreunde: einladen kostet Münzen und klappt erst, wenn etwas geschafft ist. Danach stehen sie im
+  // Hundefreundebuch und können zu Besuch kommen. Jeder Tag mit geschaffter Mission, an dem ein Freund zu Besuch ist,
+  // bringt ein Freundschaftsherz. Bei 5 Herzen: beste Freunde und ein Geschenk.
+  // «fakt» ist geprüftes Wissen zur Rasse, der Rest ist ausgedacht und zum Spaß.
+  const FREUNDE = [
+    { id: "lotte", name: "Lotte", rasse: "Dackel", preis: 80, bed: null, look: { fell: "#8b4a24", hell: "#b8723f", dunkel: "#5e2f14", ohren: "lang", klein: 0.9, lang: true },
+      spiel: "Buddeln im Sandkasten", leckerli: "Karottenstückchen", trick: "Rolle rückwärts (fast)", motto: "Klein, aber mutig!", fakt: "Dackel wurden gezüchtet, um Dachse in ihrem Bau aufzuspüren. Daher kommt auch der Name." },
+    { id: "pepe", name: "Pepe", rasse: "Mops", preis: 120, bed: { art: "missionen", wert: 3 }, look: { fell: "#e8c99a", hell: "#f3dcb8", dunkel: "#3b3030", ohren: "kipp", maske: "#3b3030", klein: 0.85 },
+      spiel: "Schnarch-Wettbewerb", leckerli: "Apfelscheiben", trick: "Pfote geben", motto: "Erst ein Nickerchen, dann die Welt.", fakt: "Möpse stammen ursprünglich aus China." },
+    { id: "nala", name: "Nala", rasse: "Husky", preis: 150, bed: { art: "level", wert: 3 }, look: { fell: "#6f7782", hell: "#f4f4f4", dunkel: "#3e444c", ohren: "spitz", maske: "husky", augen: "#5aa9e6" },
+      spiel: "Im Schnee wälzen", leckerli: "Fischhäppchen", trick: "Heulen auf Kommando", motto: "Je kälter, desto besser.", fakt: "Huskys stammen aus Sibirien. Sie ziehen Schlitten und halten große Kälte aus." },
+    { id: "fiete", name: "Fiete", rasse: "Corgi", preis: 180, bed: { art: "auftraege", wert: 2 }, look: { fell: "#d9822b", hell: "#fff4e6", dunkel: "#a55a17", ohren: "spitz", klein: 0.85, bauchWeiss: true },
+      spiel: "Ball hüten", leckerli: "Käsewürfel", trick: "Männchen machen", motto: "Kurze Beine, großes Herz.", fakt: "Corgis kommen aus Wales und wurden zum Hüten von Rindern eingesetzt." },
+    { id: "luna", name: "Luna", rasse: "Dalmatiner", preis: 220, bed: { art: "serie", wert: 5 }, look: { fell: "#fafafa", hell: "#ffffff", dunkel: "#222222", ohren: "haengend", flecken: true },
+      spiel: "Wettrennen", leckerli: "Hühnchen", trick: "Slalom durch die Beine", motto: "Jeder Punkt ist einzigartig.", fakt: "Dalmatiner-Welpen kommen fast ganz weiß auf die Welt. Die Punkte erscheinen erst in den ersten Wochen." },
+    { id: "bruno", name: "Bruno", rasse: "Bernhardiner", preis: 250, bed: { art: "richtig", wert: 150 }, look: { fell: "#b5521b", hell: "#ffffff", dunkel: "#6b2d0c", ohren: "haengend", gross: 1.12, bauchWeiss: true, maske: "#6b2d0c" },
+      spiel: "Kuscheln im Schnee", leckerli: "Kauknochen", trick: "Ganz still sitzen", motto: "Ich bin da, wenn du mich brauchst.", fakt: "Bernhardiner sind nach dem Hospiz am Großen Sankt Bernhard in den Schweizer Alpen benannt. Dort halfen sie, Menschen im Schnee zu finden." },
+    { id: "coco", name: "Coco", rasse: "Pudel", preis: 280, bed: { art: "probe", wert: 90 }, look: { fell: "#f3e5d0", hell: "#fff8ee", dunkel: "#c9b08c", ohren: "locken", locken: true },
+      spiel: "Planschen", leckerli: "Hundekekse", trick: "Tanzen auf zwei Beinen", motto: "Immer gut frisiert.", fakt: "Pudel holten früher Enten aus dem Wasser. «Pudeln» ist ein altes Wort für «im Wasser plantschen»." },
+    { id: "ole", name: "Ole", rasse: "Beagle", preis: 320, bed: { art: "level", wert: 6 }, look: { fell: "#c27a3a", hell: "#ffffff", dunkel: "#3b2a20", ohren: "lang", sattel: "#3b2a20", bauchWeiss: true },
+      spiel: "Spurensuche", leckerli: "Alles, was er findet", trick: "Leckerli erschnüffeln", motto: "Meine Nase weiß mehr.", fakt: "Beagles haben eine sehr feine Nase. Manche arbeiten deshalb am Flughafen und erschnüffeln verbotene Lebensmittel im Gepäck." },
+    { id: "kalle", name: "Kalle", rasse: "Border Collie", preis: 360, bed: { art: "missionen", wert: 15 }, look: { fell: "#262626", hell: "#ffffff", dunkel: "#111111", ohren: "kipp", bauchWeiss: true, blesse: true },
+      spiel: "Frisbee", leckerli: "Rindfleischstreifen", trick: "Zehn Spielzeuge beim Namen kennen", motto: "Gib mir eine Aufgabe!", fakt: "Border Collies hüten Schafe und gelten als besonders lernfreudig." },
+    { id: "sunny", name: "Sunny", rasse: "Golden Retriever", preis: 400, bed: { art: "richtig", wert: 500 }, look: { fell: "#e3b25c", hell: "#f6d79a", dunkel: "#b8862f", ohren: "haengend" },
+      spiel: "Stöckchen holen", leckerli: "Erdnussbutter-Kekse", trick: "Zeitung bringen", motto: "Jeder ist mein Freund.", fakt: "Golden Retriever stammen aus Schottland. «Retrieve» ist Englisch und heißt «zurückbringen»." },
+    { id: "tiny", name: "Tiny", rasse: "Chihuahua", preis: 450, bed: { art: "serie", wert: 14 }, look: { fell: "#e2b07a", hell: "#f7dcb9", dunkel: "#9c6a3a", ohren: "riesig", klein: 0.7 },
+      spiel: "In der Handtasche reisen", leckerli: "Mini-Würstchen", trick: "Drehen im Kreis", motto: "Wer braucht schon Größe?", fakt: "Der Chihuahua gilt als kleinste Hunderasse der Welt und ist nach einem Bundesstaat in Mexiko benannt." },
+    { id: "berta", name: "Berta", rasse: "Berner Sennenhund", preis: 520, bed: { art: "level", wert: 10 }, look: { fell: "#1f1f1f", hell: "#ffffff", dunkel: "#111111", ohren: "haengend", gross: 1.08, bauchWeiss: true, blesse: true, backen: "#b5652b" },
+      spiel: "Wanderungen in den Bergen", leckerli: "Käse", trick: "Einen Bollerwagen ziehen", motto: "Gemütlich ist schön.", fakt: "Berner Sennenhunde kommen aus der Schweiz. Früher zogen sie dort kleine Karren mit Milchkannen." },
+  ];
+  const freund = (id) => FREUNDE.find((f) => f.id === id) || null;
+  // Längste Folge von Tagen mit Übung, irgendwann
+  function besteSerie(s) {
+    const tage = Object.keys(s.tage).filter((d) => s.tage[d].aufgaben > 0).sort();
+    let best = 0, lauf = 0, vor = null;
+    for (const d of tage) { lauf = vor && plusTage(vor, 1) === d ? lauf + 1 : 1; best = Math.max(best, lauf); vor = d; }
+    return best;
+  }
+  // Wie weit eine Bedingung erfüllt ist: { ist, soll, ok, text }
+  function bedingung(s, bed) {
+    if (!bed) return { ist: 0, soll: 0, ok: true, text: "" };
+    const soll = bed.wert;
+    let ist = 0, text = "";
+    switch (bed.art) {
+      case "level": ist = level(s.punkte); text = `Level ${soll}`; break;
+      case "missionen": ist = Object.keys(s.tage).filter((d) => s.tage[d].mission).length; text = `${soll} Missionen geschafft`; break;
+      case "richtig": ist = Object.keys(s.tage).reduce((a, d) => a + (s.tage[d].richtig || 0), 0); text = `${soll} Aufgaben richtig gelöst`; break;
+      case "serie": ist = besteSerie(s); text = `${soll} Tage in Folge geübt`; break;
+      case "probe": ist = Object.keys(s.proben).reduce((a, f) => Math.max(a, ...s.proben[f].map((p) => p.prozent)), 0); text = `eine Probe-Arbeit mit ${soll} %`; break;
+      case "auftraege": ist = Object.keys(s.auftraege).length; text = `${soll} Challenges geschafft`; break;
+      case "freunde": ist = Object.keys(s.freunde).length; text = `${soll} Hundefreunde`; break;
+    }
+    return { ist: Math.min(ist, soll), soll, ok: ist >= soll, text };
+  }
+  function einladen(s, id, heute) {
+    const f = freund(id);
+    if (!f) return { ok: false, grund: "unbekannt" };
+    if (s.freunde[id]) return { ok: false, grund: "schon" };
+    const b = bedingung(s, f.bed);
+    if (!b.ok) return { ok: false, grund: "bedingung", bed: b };
+    if (s.muenzen < f.preis) return { ok: false, grund: "muenzen", fehlt: f.preis - s.muenzen };
+    s.muenzen -= f.preis; s.freunde[id] = { seit: heute, herzen: 0, tag: "" }; s.besuch = id;
+    return { ok: true, freund: f };
+  }
+  // Nach der geschafften Mission: Der Freund, der gerade zu Besuch ist, bekommt ein Herz (einmal am Tag)
+  function freundschaftsTag(s, heute) {
+    const f = s.besuch && s.freunde[s.besuch];
+    if (!f || f.tag === heute || f.herzen >= 5) return null;
+    f.herzen++; f.tag = heute;
+    const geschenk = f.herzen === 5 ? LOHN.freundGeschenk : 0;
+    s.muenzen += geschenk;
+    return { id: s.besuch, herzen: f.herzen, geschenk };
+  }
+  // Outfit an- oder ausziehen; an derselben Stelle trägt der Hund immer nur ein Ding
+  function anziehen(s, id) {
+    const d = SHOP.zubehoer.find((x) => x.id === id);
+    if (!d || !s.besitz.includes(id)) return false;
+    const i = s.traegt.indexOf(id);
+    if (i >= 0) { s.traegt.splice(i, 1); return true; }
+    s.traegt = s.traegt.filter((x) => { const y = SHOP.zubehoer.find((z) => z.id === x); return !y || y.platz !== d.platz; });
+    s.traegt.push(id);
+    return true;
+  }
   // Was es im Laden für dieses Tier gibt
   const laden = (art) => ({ snacks: art === "hund" ? SHOP.hund.snacks : SHOP.snacks, zubehoer: SHOP.zubehoer, zimmer: art === "hund" ? SHOP.hund.zimmer : SHOP.zimmer });
   const ALLE_SNACKS = SHOP.snacks.concat(SHOP.hund.snacks);
@@ -968,10 +1305,12 @@
     if (!d) return { ok: false, grund: "unbekannt" };
     const snack = ALLE_SNACKS.includes(d);
     if (!snack && s.besitz.includes(id)) return { ok: false, grund: "schon" };
+    const b = bedingung(s, d.bed);
+    if (!b.ok) return { ok: false, grund: "bedingung", bed: b };
     if (s.muenzen < d.preis) return { ok: false, grund: "muenzen", fehlt: d.preis - s.muenzen };
     s.muenzen -= d.preis;
     if (snack) s.gefuettert++;
-    else { s.besitz.push(id); if (SHOP.zubehoer.includes(d) && !s.traegt.includes(id)) s.traegt.push(id); }
+    else { s.besitz.push(id); if (SHOP.zubehoer.includes(d) && !s.traegt.includes(id)) anziehen(s, id); }
     return { ok: true, ding: d, snack };
   }
   // Level aus XP: Level n beginnt bei 50·n·(n-1) XP (100, 300, 600, 1000, 1500 …)
@@ -992,7 +1331,8 @@
     s.tokens--; t.spiele = (t.spiele || 0) + 1; s.spiele[art].runden++;
     return { ok: true };
   }
-  function spielEnde(s, art, punkte) {
+  function spielEnde(s, art, punkte, platz) {
+    if (art === "kart" && platz === 1) s.spiele.kart.siege = (s.spiele.kart.siege || 0) + 1;
     const neu = punkte > s.spiele[art].best;
     if (neu) s.spiele[art].best = Math.floor(punkte);
     return { rekord: neu };
@@ -1002,7 +1342,7 @@
   // Belohnungen: Münzen nur für Richtiges auf Anhieb, Tokens nur für gute Etappen (mindestens 80 % auf Anhieb)
   const LOHN = { richtig: 1, spaeter: 0, combo: 5, comboBonus: 1, etappe: 2, mission: 3, probe: 3, auftrag: 5,
     punkteRichtig: 10, punkteSpaeter: 3, punkteEtappe: 10, punkteMission: 20, punkteAuftrag: 30, tokenQuote: 0.8,
-    punkteErklaerung: 15, bossMuenzen: 2, punkteBoss: 15 };
+    punkteErklaerung: 15, bossMuenzen: 2, punkteBoss: 15, freundGeschenk: 40 };
   // Mitmach-Auftrag erledigt: einmal Münzen, danach nur noch Freude
   function auftragErledigt(s, id, heute) {
     if (s.auftraege[id]) return false;
@@ -1024,7 +1364,8 @@
     defaults, migrate, record, teilStand, bereitschaft, wackelt, sterneFuer,
     buildEtappe, buildProbe, planListe, planTag, etappenFuer,
     levelStart, level, rang, RAENGE, THEMES, tokenNoetig, spielStart, spielEnde,
-    SHOP, laden, shopDing, kaufe, varianten, teileVon, ueberlappt, STUFEN, stufe, LOHN, erklaerungGeschafft,
+    SHOP, laden, shopDing, kaufe, FREUNDE, freund, bedingung, einladen, freundschaftsTag, anziehen, besteSerie, varianten, teileVon, ueberlappt, STUFEN, stufe, LOHN, erklaerungGeschafft,
+    GEO, geoSvg, gerade, geoPx: px, lageVon, imBild,
     zahlText, divSchritte, divAblauf, divAnfaenge, divPruefe, divPasst, erzeugeDivision, erzeugeDetektiv, erzeugeUeberschlag, divText, ergebnisText,
   };
   root.LN = L;

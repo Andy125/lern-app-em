@@ -85,7 +85,7 @@ for (const fach of FAECHER) {
   for (const th of fach.themen) for (const fo of th.erklaerung || []) {
     const E = `${F}/${th.id}/Erklärung «${fo.titel}»`;
     ok(fo.titel && (fo.text || fo.bild || fo.rechnung || fo.check), `${E}: Titel und Inhalt`);
-    if (fo.bild) ok(/^<svg viewBox="0 0 640 \d+"/.test(fo.bild) && !/NaN|undefined/.test(fo.bild), `${E}: Bild ist ein gültiges SVG`);
+    if (fo.bild) ok(/^<svg viewBox="0 0 \d+ \d+"/.test(fo.bild) && !/NaN|undefined/.test(fo.bild), `${E}: Bild ist ein gültiges SVG`);
     if (fo.rechnung) { const D = L.divSchritte(fo.rechnung.a, fo.rechnung.b); ok(fo.rechnung.bis === "alles" || (fo.rechnung.bis >= 0 && fo.rechnung.bis < L.divAblauf(D).length), `${E}: Beispielrechnung bis zu einem gültigen Schritt`); }
     if (fo.check) ok(fo.check.frage && fo.check.antwort && fo.check.falsch.length >= 2 && !fo.check.falsch.includes(fo.check.antwort), `${E}: Check mit einer richtigen und mind. zwei falschen Antworten`);
     ok(!/[\u2013\u2014]/.test(JSON.stringify(fo).replace(/<svg[^]*?<\/svg>/g, "")), `${E}: keine langen Gedankenstriche`);
@@ -113,6 +113,44 @@ const zahlAus = (txt) => Number(String(txt).replace(/[\s\u00a0]/g, ""));
     ok(ab.length === 1 + 4 * D.schritte.length, `${a} : ${b}: Start, je Schritt Teilen, Mal, Minus, Runter (außer am Ende), Fertig`);
   }
   ok(L.zahlText(4218) === "4218" && L.zahlText(12500) === "12\u00a0500" && L.zahlText(1234567) === "1\u00a0234\u00a0567", "Zahlen wie im Schulbuch");
+}
+// ---------- Geometrie: aus den Koordinaten unabhängig nachgeprüft ----------
+const amRand = (P) => Math.abs(P[0]) < 1e-9 || Math.abs(P[1]) < 1e-9 || Math.abs(P[0] - L.GEO.C) < 1e-9 || Math.abs(P[1] - L.GEO.Z) < 1e-9;
+const gleich = (P, Q) => Math.abs(P[0] - Q[0]) < 1e-9 && Math.abs(P[1] - Q[1]) < 1e-9;
+const lageAus = (a, b) => (a[0] * b[0] + a[1] * b[1] === 0 ? "senkrecht" : a[0] * b[1] - a[1] * b[0] === 0 ? "parallel" : "schraeg");
+function pruefeGeo(teil, t, T) {
+  ok(/^<svg viewBox="0 0 \d+ \d+"/.test(t.bild) && !/NaN|undefined|Infinity/.test(t.bild), `${T}: Bild ist ein gültiges SVG`);
+  const g = t.geo;
+  if (t.modus === "linie-wahl") {
+    const [a, b] = g.von, typ = amRand(a) && amRand(b) ? "Gerade" : amRand(a) || amRand(b) ? "Strahl" : "Strecke";
+    ok(typ === g.typ && t.loesung === typ + " AB", `${T}: Linie ist wirklich eine ${g.typ}`);
+    if (typ === "Strecke") ok((gleich(a, g.A) && gleich(b, g.B)) || (gleich(a, g.B) && gleich(b, g.A)), `${T}: Strecke endet an A und B`);
+    if (typ === "Strahl") ok(gleich(a, g.A) && !amRand(g.B), `${T}: Strahl beginnt bei A und läuft über B hinaus`);
+  }
+  if (t.modus === "linie-zaehlen") {
+    const art = ([a, b]) => (amRand(a) && amRand(b) ? "Gerade" : amRand(a) || amRand(b) ? "Strahl" : "Strecke");
+    ok(g.linien.every((l) => art(l.von) === l.typ), `${T}: jede Linie hat die Enden ihrer Art`);
+    ok(t.loesung === g.linien.filter((l) => l.typ === g.frageTyp).length && g.linien.length >= 3, `${T}: richtig gezählt`);
+  }
+  if (t.modus === "lage-wahl") {
+    const [a, b] = g.linien, lage = lageAus(a.d, b.d);
+    ok(lage === g.lage && t.loesung === t.optionen[["senkrecht", "parallel", "schraeg"].indexOf(lage)], `${T}: Lage ${lage} stimmt`);
+    if (lage === "parallel") ok((b.p[0] - a.p[0]) * a.d[1] - (b.p[1] - a.p[1]) * a.d[0] !== 0, `${T}: zwei verschiedene Parallelen`);
+    if (lage === "schraeg") { const c = Math.abs(a.d[0] * b.d[0] + a.d[1] * b.d[1]) / Math.hypot(...a.d) / Math.hypot(...b.d); ok(c > 0.4 && c < 0.93, `${T}: deutlich schräg, nicht fast senkrecht oder fast parallel`); }
+  }
+  if (t.modus === "welche-wahl") {
+    const [gg, ...rest] = g.linien;
+    const passen = rest.filter((l) => lageAus(gg.d, l.d) === g.nach).map((l) => l.name);
+    ok(passen.length === 1 && passen[0] === t.loesung, `${T}: genau eine Gerade ist ${g.nach} zu g (${passen.join(",")})`);
+  }
+  if (t.modus === "abstand-zahl" || t.modus === "abstand-parallel") {
+    const quer = g.waag ? (g.punkt ? g.punkt.y : g.h[1]) : g.punkt ? g.punkt.x : g.h[0];
+    ok(Math.abs(t.loesung - Math.abs(quer - g.lage) / 2) < 1e-9 && L.check(t, String(t.loesung).replace(".", ",")).ok, `${T}: Abstand ${t.loesung} cm stimmt und wird mit Komma angenommen`);
+  }
+  if (t.modus === "abstand-wahl") {
+    const senk = g.linien.map(([P, Q], i) => ({ nr: String(i + 1), senk: g.waag ? P[0] === Q[0] : P[1] === Q[1] }));
+    ok(senk.filter((x) => x.senk).length === 1 && senk.find((x) => x.senk).nr === t.loesung, `${T}: nur der richtige Weg steht senkrecht auf g`);
+  }
 }
 function pruefeMathe(fach, teil, t, T) {
   const k = teil.karte;
@@ -248,7 +286,8 @@ for (const fach of FAECHER) {
     ok(JSON.stringify(t) === JSON.stringify(L.makeTask(fach, teil.id, modus, seed)), `${T}: gleicher Startwert, gleiche Aufgabe`);
     ok(t.frage && t.tipp && t.erklaerung, `${T}: Frage, Tipp und Erklärung vorhanden`);
     const e = erwartet(fach, teil, modus, t);
-    if (L.TYPEN.indexOf(teil.karte.typ) >= L.TYPEN.indexOf("teilen")) pruefeMathe(fach, teil, t, T);
+    if (L.TYPEN.indexOf(teil.karte.typ) >= L.TYPEN.indexOf("linie")) pruefeGeo(teil, t, T);
+    else if (L.TYPEN.indexOf(teil.karte.typ) >= L.TYPEN.indexOf("teilen")) pruefeMathe(fach, teil, t, T);
     if (e !== undefined) ok(JSON.stringify(t.loesung) === JSON.stringify(e), `${T}: Lösung stimmt mit Inhalt (${JSON.stringify(t.loesung)} statt ${JSON.stringify(e)})`);
     switch (t.art) {
       case "wahl": {
@@ -400,8 +439,49 @@ for (const roh of [null, undefined, "kaputt", 42, [], { muenzen: "abc" }, { fort
   ok(!L.kaufe(s, "kuchen").ok && s.muenzen === 4, "zu wenig Münzen: nichts passiert");
   ok(L.kaufe(s, "apfel").ok && s.muenzen === 1 && s.gefuettert === 1, "Snack kaufen und füttern");
   s.muenzen = 100;
-  ok(L.kaufe(s, "krone").ok && s.traegt.includes("krone") && L.kaufe(s, "krone").grund === "schon", "Zubehör nur einmal");
+  ok(L.kaufe(s, "brille").ok && s.traegt.includes("brille") && L.kaufe(s, "brille").grund === "schon", "Zubehör nur einmal");
   ok(L.stufe(0) === 0 && L.stufe(300) === 1 && L.stufe(2499) === 2 && L.stufe(9999) === 3, "Wachstums-Stufen");
+}
+
+// ---------- Laden für den Hund, Hundefreunde ----------
+{
+  const zub = L.SHOP.zubehoer, zim = L.SHOP.hund.zimmer;
+  ok(zub.length === 17 && zim.length === 20, `doppelt so viel im Laden (${zub.length} Outfit-Teile, ${zim.length} Zimmer-Sachen)`);
+  ok(new Set(zub.map((d) => d.id)).size === zub.length && new Set(zim.map((d) => d.id)).size === zim.length, "jede Sache nur einmal im Laden");
+  ok(zub.every((d) => d.platz) && zub.every((d) => d.preis >= 30) && zim.every((d) => d.preis >= 25), "jedes Outfit-Teil hat eine Körperstelle, nichts ist geschenkt");
+  const summe = zub.concat(zim).reduce((a, d) => a + d.preis, 0) + L.FREUNDE.reduce((a, f) => a + f.preis, 0);
+  ok(summe > 8000, `alles zusammen kostet viel (${summe} Münzen), das reicht für viele Wochen`);
+  ok(L.FREUNDE.length === 12 && L.FREUNDE.every((f) => f.name && f.rasse && f.fakt && f.trick && f.motto), "zwölf Hundefreunde mit Steckbrief");
+  const s = L.defaults(); s.tier = { art: "hund", name: "X" }; s.muenzen = 5000;
+  ok(L.kaufe(s, "krone").grund === "bedingung" && s.muenzen === 5000, "Krone erst ab Level 8, auch mit genug Münzen");
+  s.punkte = L.levelStart(8);
+  ok(L.kaufe(s, "krone").ok, "ab Level 8 gibt es die Krone");
+  ok(L.kaufe(s, "partyhut").ok && s.traegt.includes("partyhut") && !s.traegt.includes("krone"), "eine Sache pro Körperstelle: der Partyhut ersetzt die Krone");
+  ok(L.kaufe(s, "pulli").ok && L.kaufe(s, "hoodie").ok && s.traegt.includes("hoodie") && !s.traegt.includes("pulli") && s.traegt.includes("partyhut"), "Hoodie ersetzt den Pulli, der Hut bleibt");
+  ok(L.kaufe(s, "fotowand").grund === "bedingung", "Fotowand erst mit drei Hundefreunden");
+  // Einladen
+  const g = L.defaults(); g.muenzen = 70;
+  ok(!L.einladen(g, "lotte", "2026-11-27").ok && !g.freunde.lotte, "zu wenig Münzen: niemand kommt");
+  g.muenzen = 500;
+  ok(!L.einladen(g, "berta", "2026-11-27").ok, "Berner Sennenhund erst ab Level 10");
+  ok(L.einladen(g, "lotte", "2026-11-27").ok && g.muenzen === 420 && g.besuch === "lotte", "Dackel eingeladen, kommt sofort zu Besuch");
+  ok(!L.einladen(g, "lotte", "2026-11-27").ok && g.muenzen === 420, "niemand doppelt einladen");
+  // Freundschaft wächst einmal pro Tag mit geschaffter Mission
+  const r1 = L.freundschaftsTag(g, "2026-11-27"), r2 = L.freundschaftsTag(g, "2026-11-27");
+  ok(r1 && r1.herzen === 1 && r2 === null, "ein Herz pro Tag, nicht mehr");
+  for (const d of ["2026-11-28", "2026-11-29", "2026-11-30"]) L.freundschaftsTag(g, d);
+  const m = g.muenzen, r5 = L.freundschaftsTag(g, "2026-12-01");
+  ok(r5.herzen === 5 && r5.geschenk === L.LOHN.freundGeschenk && g.muenzen === m + L.LOHN.freundGeschenk, "bei fünf Herzen beste Freunde und ein Geschenk");
+  ok(L.freundschaftsTag(g, "2026-12-02") === null, "mehr als fünf Herzen gibt es nicht");
+  ok(L.bedingung(g, { art: "serie", wert: 5 }).soll === 5 && L.bedingung(g, { art: "freunde", wert: 3 }).ist === 1, "Bedingungen zählen richtig");
+  // alter Stand ohne Freunde, kaputte Daten
+  const alt = L.migrate({ v: 2, muenzen: 10, tier: { art: "hund", name: "X" } });
+  ok(alt.freunde && typeof alt.freunde === "object" && alt.besuch === "" && alt.spiele.kart.best === 0 && alt.spiele.kart.siege === 0, "alter Stand bekommt Freunde und Kart");
+  const kaputt = L.migrate({ v: 7, freunde: { lotte: { herzen: 99 }, quatsch: 5 }, besuch: "niemand" });
+  ok(kaputt.besuch === "" && (!kaputt.freunde.lotte || kaputt.freunde.lotte.herzen <= 5) && !kaputt.freunde.quatsch, "kaputte Freunde-Daten werden repariert");
+  // Kart-Siege
+  const k = L.defaults(); L.spielEnde(k, "kart", 1500, 1); L.spielEnde(k, "kart", 900, 3);
+  ok(k.spiele.kart.siege === 1 && k.spiele.kart.best === 1500, "Kart: Siege und Rekord");
 }
 
 // ---------- Level, Tokens, Spielhalle ----------

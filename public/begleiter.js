@@ -105,10 +105,24 @@
     schleife: `<g transform="translate(134 44) rotate(20)"><polygon points="0,0 -18,-11 -18,11" fill="#e84a7a"/><polygon points="0,0 18,-11 18,11" fill="#e84a7a"/><circle r="5" fill="#c2185b"/></g>`,
     blume: `<g transform="translate(62 48)"><circle cx="0" cy="-9" r="6.5" fill="#fff"/><circle cx="8.5" cy="-3" r="6.5" fill="#fff"/><circle cx="5.5" cy="7.5" r="6.5" fill="#fff"/><circle cx="-5.5" cy="7.5" r="6.5" fill="#fff"/><circle cx="-8.5" cy="-3" r="6.5" fill="#fff"/><circle r="5" fill="#f2c94c"/></g>`,
     halsband: `<path d="M66 121 Q100 137 134 121 L133 129 Q100 146 67 129 Z" fill="#2a6fdb" stroke="#1d4f9e" stroke-width="1.5"/><circle cx="100" cy="141" r="5.5" fill="#f2c94c" stroke="#c9a227" stroke-width="1.5"/>`,
+    // Oberteile über Körper und Vorderbeinen
+    pulli: `<path d="M63 126 Q100 112 137 126 L139 166 Q100 178 61 166 Z" fill="#7b6cff"/><path d="M62 140 Q100 152 138 140 M61 154 Q100 166 139 154" stroke="#ffd166" stroke-width="6" fill="none"/><rect x="74" y="132" width="24" height="30" rx="9" fill="#7b6cff"/><rect x="102" y="132" width="24" height="30" rx="9" fill="#7b6cff"/><path d="M74 150 L98 150 M102 150 L126 150" stroke="#ffd166" stroke-width="5"/><path d="M70 124 Q100 136 130 124" stroke="#5a4be0" stroke-width="7" fill="none" stroke-linecap="round"/>`,
+    hoodie: `<path d="M66 118 Q100 98 134 118 Q118 130 100 130 Q82 130 66 118 Z" fill="#e0559a"/><path d="M62 126 Q100 114 138 126 L140 168 Q100 180 60 168 Z" fill="#ff7eb6"/><rect x="74" y="132" width="24" height="30" rx="9" fill="#ff7eb6"/><rect x="102" y="132" width="24" height="30" rx="9" fill="#ff7eb6"/><path d="M80 150 L120 150 L116 166 L84 166 Z" fill="#e0559a"/><path d="M92 128 L90 146 M108 128 L110 146" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/><circle cx="90" cy="147" r="2.6" fill="#fff"/><circle cx="110" cy="147" r="2.6" fill="#fff"/>`,
+    regenmantel: `<path d="M60 124 Q100 112 140 124 L144 174 Q100 186 56 174 Z" fill="#ffd23f"/><rect x="73" y="132" width="25" height="32" rx="9" fill="#ffd23f"/><rect x="102" y="132" width="25" height="32" rx="9" fill="#ffd23f"/><path d="M76 120 L100 134 L124 120" stroke="#e0b100" stroke-width="7" fill="none" stroke-linejoin="round"/><line x1="100" y1="134" x2="100" y2="178" stroke="#e0b100" stroke-width="2.5"/><circle cx="106" cy="146" r="3" fill="#1d4f9e"/><circle cx="106" cy="160" r="3" fill="#1d4f9e"/>`,
+    pfotenschuhe: [[50, 190], [150, 190], [85, 191], [115, 191]].map(([x, y]) => `<ellipse cx="${x}" cy="${y}" rx="16" ry="9" fill="#e63946"/><path d="M${x - 15} ${y + 4} Q${x} ${y + 11} ${x + 15} ${y + 4}" stroke="#fff" stroke-width="3" fill="none"/><rect x="${x - 11}" y="${y - 12}" width="22" height="8" rx="3" fill="#e63946"/>`).join(""),
+    // Am Hals
+    fliege: `<g transform="translate(100 130)"><polygon points="0,0 -17,-10 -17,10" fill="#1d3557"/><polygon points="0,0 17,-10 17,10" fill="#1d3557"/><circle r="5" fill="#457b9d"/><circle cx="-10" cy="-2" r="1.6" fill="#a8dadc"/><circle cx="10" cy="2" r="1.6" fill="#a8dadc"/></g>`,
+    medaille: `<path d="M86 122 L96 150 L104 150 L114 122 L106 122 L100 140 L94 122 Z" fill="#2a6fdb"/><circle cx="100" cy="158" r="12" fill="#f2c94c" stroke="#c9a227" stroke-width="2.5"/><path d="M100 151 l2.4 5 5.4 .6 -4 3.6 1.2 5.3 -5 -2.8 -5 2.8 1.2 -5.3 -4 -3.6 5.4 -.6 Z" fill="#fff6c2"/>`,
+    // Augen und Ohren
+    sonnenbrille: `<path d="M66 78 Q82 72 96 78 Q96 96 82 96 Q68 96 66 78 Z M104 78 Q118 72 134 78 Q132 96 118 96 Q104 96 104 78 Z" fill="#1b1b2f" stroke="#ff5fa2" stroke-width="2.5"/><path d="M96 80 Q100 76 104 80" stroke="#ff5fa2" stroke-width="3" fill="none"/><path d="M72 81 L80 79" stroke="#fff" stroke-width="2" opacity=".6"/><path d="M110 81 L118 79" stroke="#fff" stroke-width="2" opacity=".6"/>`,
+    kopfhoerer: `<path d="M50 78 Q50 18 100 18 Q150 18 150 78" stroke="#2b2550" stroke-width="8" fill="none" stroke-linecap="round"/><rect x="38" y="64" width="22" height="34" rx="10" fill="#5fddbe" stroke="#2b2550" stroke-width="3"/><rect x="140" y="64" width="22" height="34" rx="10" fill="#5fddbe" stroke="#2b2550" stroke-width="3"/>`,
+    // Auf dem Kopf
+    partyhut: `<g transform="rotate(-10 100 40)"><path d="M80 42 L100 -6 L120 42 Z" fill="#5fddbe"/><path d="M86 28 L114 28 M92 14 L108 14" stroke="#ff5fa2" stroke-width="5"/><circle cx="100" cy="-6" r="7" fill="#ffd166"/><path d="M78 42 Q100 50 122 42" stroke="#2b2550" stroke-width="2" fill="none"/></g>`,
+    weihnachtsmuetze: `<path d="M62 50 Q66 10 104 8 Q140 10 150 36 Q160 58 168 62" stroke="none" fill="#d62828"/><path d="M62 50 Q66 10 104 8 Q138 12 146 40 L140 50 Z" fill="#d62828"/><path d="M146 40 Q160 56 166 64" stroke="#d62828" stroke-width="10" stroke-linecap="round" fill="none"/><circle cx="168" cy="66" r="9" fill="#fff"/><rect x="56" y="44" width="92" height="14" rx="7" fill="#fff"/>`,
     krone: `<path d="M74 34 L78 10 L90 26 L100 6 L110 26 L122 10 L126 34 Z" fill="#f2c94c" stroke="#d4a017" stroke-width="2"/><circle cx="100" cy="24" r="3.5" fill="#e63946"/>`,
   };
   // Reihenfolge beim Zeichnen: Halstuch unten, Krone ganz oben
-  const ZUBEHOER_REIHE = ["halsband", "halstuch", "brille", "muetze", "schleife", "blume", "krone"];
+  const ZUBEHOER_REIHE = ["pfotenschuhe", "pulli", "hoodie", "regenmantel", "halsband", "halstuch", "fliege", "medaille", "brille", "sonnenbrille", "kopfhoerer", "muetze", "weihnachtsmuetze", "partyhut", "schleife", "blume", "krone"];
   const GROESSE = [0.78, 0.88, 1, 1];
 
   function tierSvg(art, o) {
@@ -141,6 +155,49 @@
     return `<svg class="tier-svg${o.klasse ? " " + o.klasse : ""}" viewBox="0 0 200 200" role="img" aria-label="${A.name}">${g}</svg>`;
   }
 
+  // Hundefreunde: ein gemeinsamer Bauplan, die Rasse ergibt sich aus Farben, Ohren, Maske, Flecken und Größe
+  function freundSvg(f, o) {
+    o = o || {};
+    const L0 = f.look, mood = o.mood || "froh", fell = L0.fell, hell = L0.hell, dunkel = L0.dunkel;
+    let s = "";
+    const lang = L0.lang ? 22 : 0;
+    // Schwanz und Körper
+    s += `<path d="M${140 + lang} 172 Q${182 + lang} 172 ${176 + lang} 140" stroke="${fell}" stroke-width="12" fill="none" stroke-linecap="round"/>`;
+    s += `<ellipse cx="${100 + lang / 2}" cy="${156}" rx="${46 + lang}" ry="${L0.lang ? 30 : 38}" fill="${fell}"/>`;
+    if (L0.sattel) s += `<ellipse cx="${108 + lang / 2}" cy="146" rx="${34 + lang / 2}" ry="22" fill="${L0.sattel}"/>`;
+    if (L0.bauchWeiss || L0.flecken) s += `<ellipse cx="100" cy="164" rx="26" ry="${L0.lang ? 18 : 25}" fill="${hell}"/>`;
+    if (L0.flecken) s += [[70, 146], [128, 140], [112, 170], [80, 172], [140, 162], [96, 136]].map(([x, y], i) => `<ellipse cx="${x + lang / 2}" cy="${y}" rx="${4 + (i % 3)}" ry="${3.5 + (i % 2)}" fill="${dunkel}"/>`).join("");
+    if (L0.locken) s += [[66, 150], [80, 136], [100, 132], [120, 136], [134, 150], [136, 170], [64, 170]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="13" fill="${fell}" stroke="${dunkel}" stroke-width="1.5"/>`).join("");
+    s += `<ellipse cx="80" cy="188" rx="15" ry="8" fill="${L0.bauchWeiss || L0.flecken ? hell : dunkel}"/><ellipse cx="120" cy="188" rx="15" ry="8" fill="${L0.bauchWeiss || L0.flecken ? hell : dunkel}"/>`;
+    // Ohren hinter dem Kopf
+    const O = L0.ohren;
+    if (O === "spitz") s += `<polygon points="58,64 54,14 94,44" fill="${fell}"/><polygon points="64,56 61,28 84,46" fill="${L0.maske === "husky" ? "#f4f4f4" : "#f6b8c4"}"/><polygon points="142,64 146,14 106,44" fill="${fell}"/><polygon points="136,56 139,28 116,46" fill="${L0.maske === "husky" ? "#f4f4f4" : "#f6b8c4"}"/>`;
+    if (O === "riesig") s += `<polygon points="60,66 30,8 92,44" fill="${fell}"/><polygon points="64,58 42,22 84,46" fill="#f6b8c4"/><polygon points="140,66 170,8 108,44" fill="${fell}"/><polygon points="136,58 158,22 116,46" fill="#f6b8c4"/>`;
+    // Kopf
+    s += `<circle cx="100" cy="84" r="46" fill="${fell}"/>`;
+    if (L0.locken) s += [[70, 50], [100, 40], [130, 50]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="16" fill="${fell}" stroke="${dunkel}" stroke-width="1.5"/>`).join("");
+    if (L0.maske === "husky") s += `<path d="M58 86 Q62 124 100 128 Q138 124 142 86 Q122 98 112 80 L100 66 L88 80 Q78 98 58 86 Z" fill="#f4f4f4"/>`;
+    if (L0.blesse) s += `<path d="M94 40 Q100 36 106 40 L110 92 L90 92 Z" fill="${hell}"/>`;
+    if (L0.backen) s += `<circle cx="70" cy="100" r="10" fill="${L0.backen}"/><circle cx="130" cy="100" r="10" fill="${L0.backen}"/>`;
+    // Schnauze
+    const maske = L0.maske && L0.maske !== "husky" ? L0.maske : null;
+    s += `<ellipse cx="100" cy="106" rx="${maske ? 22 : 24}" ry="${maske ? 16 : 19}" fill="${maske || hell}"/>`;
+    if (L0.flecken) s += `<circle cx="76" cy="70" r="5" fill="${dunkel}"/><circle cx="126" cy="64" r="4" fill="${dunkel}"/>`;
+    // Augen
+    const auge = L0.augen || "#2b2b2b";
+    if (mood === "jubel" || mood === "mampf") s += `<path d="M73 84 Q82 75 91 84 M109 84 Q118 75 127 84" stroke="#2b2b2b" stroke-width="4.5" fill="none" stroke-linecap="round"/>`;
+    else s += `<ellipse cx="82" cy="84" rx="7.5" ry="8.5" fill="${auge}"/><ellipse cx="118" cy="84" rx="7.5" ry="8.5" fill="${auge}"/><circle cx="82" cy="85" r="4" fill="#111"/><circle cx="118" cy="85" r="4" fill="#111"/><circle cx="84.5" cy="81.5" r="2.3" fill="#fff"/><circle cx="120.5" cy="81.5" r="2.3" fill="#fff"/>`;
+    s += `<path d="M90 97 Q100 91 110 97 Q110 105 100 107 Q90 105 90 97 Z" fill="#231a17"/>`;
+    s += mood === "jubel" ? `<path d="M88 110 Q100 126 112 110 Z" fill="#8a3b3b"/><path d="M95 116 Q100 124 105 116 Z" fill="#f28b8b"/>` : `<path d="M100 107 L100 112 M100 112 Q94 117 89 113 M100 112 Q106 117 111 113" stroke="#3a1f14" stroke-width="2.4" fill="none" stroke-linecap="round"/>`;
+    // Ohren vor dem Kopf
+    if (O === "haengend") s += `<path d="M62 50 Q42 56 40 84 Q40 108 54 114 Q64 106 68 86 Q72 62 62 50 Z" fill="${dunkel === "#222222" ? fell : dunkel}"/><path d="M138 50 Q158 56 160 84 Q160 108 146 114 Q136 106 132 86 Q128 62 138 50 Z" fill="${dunkel === "#222222" ? fell : dunkel}"/>` + (L0.flecken ? `<circle cx="52" cy="92" r="5" fill="${dunkel}"/><circle cx="150" cy="80" r="4" fill="${dunkel}"/>` : "");
+    if (O === "lang") s += `<path d="M62 52 Q40 58 40 96 Q42 128 56 130 Q68 120 70 92 Q72 64 62 52 Z" fill="${dunkel}"/><path d="M138 52 Q160 58 160 96 Q158 128 144 130 Q132 120 130 92 Q128 64 138 52 Z" fill="${dunkel}"/>`;
+    if (O === "kipp") s += `<path d="M58 52 Q50 32 72 34 Q84 40 80 54 Q70 62 58 52 Z" fill="${dunkel}"/><path d="M142 52 Q150 32 128 34 Q116 40 120 54 Q130 62 142 52 Z" fill="${dunkel}"/>`;
+    if (O === "locken") s += [[52, 78], [50, 98], [54, 116], [148, 78], [150, 98], [146, 116]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="11" fill="${fell}" stroke="${dunkel}" stroke-width="1.5"/>`).join("");
+    if (o.nurInhalt) return s;
+    return `<svg class="tier-svg freund-svg${o.klasse ? " " + o.klasse : ""}" viewBox="0 0 200 200" role="img" aria-label="${f.rasse}">${s}</svg>`;
+  }
+
   // Das Zimmer: Gegenstände erscheinen, sobald sie gekauft sind
   const ZIMMER = {
     lichter: `<path d="M0 14 Q50 40 100 16 Q150 40 200 16 Q250 40 300 16 Q350 40 400 14" stroke="#6d5d4b" stroke-width="2" fill="none"/>` + [[25, 26, "#f94144"], [75, 30, "#f9c74f"], [125, 26, "#90be6d"], [175, 30, "#577590"], [225, 26, "#f3722c"], [275, 30, "#f9c74f"], [325, 26, "#43aa8b"], [375, 28, "#f94144"]].map(([x, y, c]) => `<circle cx="${x}" cy="${y}" r="5" fill="${c}"/>`).join(""),
@@ -154,9 +211,15 @@
     decke: `<path d="M100 222 Q200 206 300 222 L310 252 Q200 266 90 252 Z" fill="#6f9fc0"/><path d="M130 216 L122 258 M170 211 L166 262 M210 210 L212 263 M250 212 L256 262 M286 218 L296 256" stroke="#a9c9de" stroke-width="5" opacity=".7"/><path d="M96 236 Q200 222 304 236" stroke="#a9c9de" stroke-width="5" fill="none" opacity=".7"/>`,
     korb: `<ellipse cx="200" cy="216" rx="90" ry="18" fill="#7a4a22"/><ellipse cx="200" cy="222" rx="80" ry="14" fill="#efd3a8"/>`,
     leine: `<rect x="141" y="40" width="10" height="6" rx="2" fill="#6d5d4b"/><path d="M146 46 Q132 78 146 110" stroke="#c0392b" stroke-width="4" fill="none" stroke-linecap="round"/><path d="M146 46 Q160 78 146 110" stroke="#c0392b" stroke-width="4" fill="none" stroke-linecap="round"/><rect x="142" y="108" width="8" height="10" rx="2" fill="#b0b0b0"/>`,
+    vorhang: `<rect x="22" y="26" width="120" height="6" rx="3" fill="#8d6e63"/><path d="M26 30 Q22 70 30 116 Q42 112 48 116 Q44 70 54 30 Z" fill="#b39ddb"/><path d="M138 30 Q142 70 134 116 Q122 112 116 116 Q120 70 110 30 Z" fill="#b39ddb"/><path d="M34 40 Q32 76 38 110 M128 40 Q130 76 126 110" stroke="#9575cd" stroke-width="2" fill="none"/>`,
+    fotowand: `<path d="M260 108 Q302 120 344 108" stroke="#6d5d4b" stroke-width="1.5" fill="none"/>` + [[266, 110, -6, "#f4a261"], [290, 114, 4, "#5fddbe"], [314, 114, -3, "#ff8fb1"]].map(([x, y, r, c]) => `<g transform="rotate(${r} ${x + 11} ${y + 12})"><rect x="${x}" y="${y}" width="22" height="25" fill="#fff" stroke="#ddd"/><rect x="${x + 3}" y="${y + 3}" width="16" height="14" fill="${c}"/><circle cx="${x + 11}" cy="${y + 10}" r="4" fill="#fff" opacity=".7"/></g><circle cx="${x + 11}" cy="${y + 1}" r="2" fill="#e63946"/>`).join(""),
+    leckerliglas: `<rect x="28" y="130" width="102" height="6" rx="2" fill="#a1887f"/><rect x="38" y="106" width="24" height="24" rx="5" fill="#d6f1ff" fill-opacity=".8" stroke="#8ab6d6" stroke-width="2"/><rect x="36" y="102" width="28" height="6" rx="2" fill="#e63946"/><circle cx="45" cy="122" r="3" fill="#a0522d"/><circle cx="53" cy="118" r="3" fill="#a0522d"/><circle cx="50" cy="125" r="3" fill="#a0522d"/>`,
+    pokal: `<rect x="28" y="130" width="102" height="6" rx="2" fill="#a1887f"/><path d="M96 104 L118 104 Q118 120 107 122 Q96 120 96 104 Z" fill="#f2c94c" stroke="#c9a227" stroke-width="1.5"/><path d="M96 108 Q90 108 92 114 Q94 118 98 116 M118 108 Q124 108 122 114 Q120 118 116 116" stroke="#c9a227" stroke-width="2" fill="none"/><rect x="104" y="122" width="6" height="4" fill="#c9a227"/><rect x="99" y="126" width="16" height="4" rx="1" fill="#8d6e63"/>`,
+    tipi: `<path d="M330 112 L380 232 L282 232 Z" fill="#f4a261"/><path d="M330 112 L345 232 L315 232 Z" fill="#e76f51"/><path d="M330 112 L322 100 M330 112 L338 100 M330 112 L330 98" stroke="#8d6e63" stroke-width="3" stroke-linecap="round"/><path d="M300 190 L360 190" stroke="#fff" stroke-width="4" stroke-dasharray="6 6"/><path d="M322 232 Q330 206 338 232 Z" fill="#5d3a1a"/>`,
+    sofa: `<rect x="100" y="128" width="200" height="56" rx="22" fill="#5fa8d3"/><rect x="94" y="160" width="212" height="40" rx="14" fill="#62b6cb"/><rect x="86" y="150" width="30" height="56" rx="13" fill="#4a90b8"/><rect x="284" y="150" width="30" height="56" rx="13" fill="#4a90b8"/><rect x="104" y="204" width="10" height="12" fill="#5d4037"/><rect x="286" y="204" width="10" height="12" fill="#5d4037"/><ellipse cx="140" cy="150" rx="22" ry="16" fill="#ffd166"/><ellipse cx="262" cy="150" rx="22" ry="16" fill="#ff8fb1"/>`,
     ball: `<circle cx="318" cy="232" r="14" fill="#ef476f"/><path d="M304 232 Q318 222 332 232 M318 218 L318 246" stroke="#fff" stroke-width="3" fill="none"/>`,
   };
-  const ZIMMER_REIHE = ["lichter", "bild", "regal", "leine", "teppich", "decke", "korb", "kissen", "pflanze", "bastel", "lampe"];
+  const ZIMMER_REIHE = ["lichter", "vorhang", "bild", "fotowand", "regal", "leckerliglas", "pokal", "leine", "teppich", "sofa", "tipi", "decke", "korb", "kissen", "pflanze", "bastel", "lampe"];
   const VORNE = {
     korb: `<path d="M110 222 Q200 244 290 222 L284 248 Q200 264 116 248 Z" fill="#a8692f"/><path d="M118 232 Q200 250 282 232 M120 241 Q200 258 280 241" stroke="#7a4a22" stroke-width="2" fill="none"/><path d="M140 232 L138 254 M170 238 L169 259 M200 240 L200 261 M230 238 L231 259 M260 232 L262 254" stroke="#7a4a22" stroke-width="1.6"/>`,
     napf: `<path d="M296 238 L322 238 L318 252 L300 252 Z" fill="#2e86c1"/><ellipse cx="309" cy="238" rx="13" ry="4" fill="#aed6f1"/><path d="M326 238 L352 238 L348 252 L330 252 Z" fill="#c0392b"/><ellipse cx="339" cy="238" rx="13" ry="4" fill="#8d5524"/><circle cx="335" cy="237" r="1.6" fill="#5d3a1a"/><circle cx="341" cy="238" r="1.6" fill="#5d3a1a"/><circle cx="338" cy="236" r="1.4" fill="#5d3a1a"/>`,
@@ -178,12 +241,13 @@
     for (const z of ZIMMER_REIHE) if (besitz.includes(z)) s += ZIMMER[z];
     const tier = tierSvg(art, { mood: o.mood, stufe: o.stufe, traegt: o.traegt, nurInhalt: true });
     s += `<g class="tier-im-zimmer" transform="translate(115 66) scale(0.85)">${tier}</g>`;
+    if (o.besuch) s += `<g class="freund-im-zimmer" transform="translate(${o.besuch.look.gross ? -14 : -4} ${o.besuch.look.gross ? 112 : 126}) scale(${0.55 * (o.besuch.look.gross || o.besuch.look.klein || 1)})">${freundSvg(o.besuch, { nurInhalt: true, mood: o.mood })}</g>`;
     for (const z of VORNE_REIHE) if (besitz.includes(z)) s += VORNE[z];
     return `<svg class="zimmer-svg" viewBox="0 0 400 260" role="img" aria-label="Zimmer">${s}</svg>`;
   }
 
   // Bilder für den Laden: Zimmersachen als Ausschnitt ihrer Zeichnung, Futter eigens gezeichnet
-  const AUSSCHNITT = { korb: "104 196 192 70", decke: "88 202 226 66", napf: "292 228 64 28", ball: "248 234 28 28", kauseil: "80 232 60 26", ente: "46 228 42 30", frisbee: "148 244 44 16", kuscheltier: "264 196 32 40", leine: "126 36 40 86" };
+  const AUSSCHNITT = { lichter: "0 6 400 40", vorhang: "18 22 128 98", bild: "258 38 86 64", fotowand: "256 102 92 42", leckerliglas: "26 98 42 40", pokal: "86 98 40 40", teppich: "66 204 268 50", pflanze: "16 124 60 112", lampe: "338 86 62 152", tipi: "278 94 106 140", sofa: "82 122 236 98", korb: "104 196 192 70", decke: "88 202 226 66", napf: "292 228 64 28", ball: "248 234 28 28", kauseil: "80 232 60 26", ente: "46 228 42 30", frisbee: "148 244 44 16", kuscheltier: "264 196 32 40", leine: "126 36 40 86" };
   const FUTTER = {
     wasser: `<path d="M5 20 L35 20 L31 33 L9 33 Z" fill="#2e86c1"/><ellipse cx="20" cy="20" rx="15" ry="4.5" fill="#aed6f1"/><path d="M20 5 Q26 13 20 16 Q14 13 20 5 Z" fill="#5dade2"/>`,
     futter: `<path d="M5 22 L35 22 L31 34 L9 34 Z" fill="#c0392b"/><ellipse cx="20" cy="22" rx="15" ry="4.5" fill="#8d5524"/>` + [[13, 19], [18, 17], [23, 19], [27, 18], [16, 21], [22, 21]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="2.6" fill="#a0522d" stroke="#5d3a1a" stroke-width=".8"/>`).join(""),
@@ -192,13 +256,15 @@
     kauknochen: `<g transform="rotate(-25 20 20)"><rect x="10" y="17" width="20" height="6" fill="#fbf6ea" stroke="#c9b99a" stroke-width="1"/><circle cx="9" cy="16" r="4.5" fill="#fbf6ea" stroke="#c9b99a"/><circle cx="9" cy="24" r="4.5" fill="#fbf6ea" stroke="#c9b99a"/><circle cx="31" cy="16" r="4.5" fill="#fbf6ea" stroke="#c9b99a"/><circle cx="31" cy="24" r="4.5" fill="#fbf6ea" stroke="#c9b99a"/><rect x="10" y="17.5" width="20" height="5" fill="#fbf6ea"/></g>`,
     kaustange: `<g transform="rotate(-35 20 20)"><rect x="6" y="16" width="28" height="8" rx="4" fill="#b5651d"/><path d="M10 16 L14 24 M16 16 L20 24 M22 16 L26 24 M28 16 L31 22" stroke="#7b3f00" stroke-width="1.6"/></g>`,
   };
+  const KLEIDUNG_AUSSCHNITT = { halsband: "60 114 80 36", schleife: "112 28 44 36", blume: "48 34 30 30", halstuch: "62 116 76 48", brille: "64 68 72 34", muetze: "54 14 116 52", fliege: "80 116 40 28", partyhut: "72 -14 60 66", sonnenbrille: "62 68 76 32", weihnachtsmuetze: "52 4 126 72", pulli: "58 108 84 74", kopfhoerer: "34 12 132 90", regenmantel: "54 110 92 78", hoodie: "58 96 84 86", pfotenschuhe: "32 176 136 26", krone: "70 2 60 36", medaille: "82 118 36 54" };
   function ladenIcon(id) {
     if (FUTTER[id]) return `<svg class="laden-bild" viewBox="0 0 40 40" aria-hidden="true">${FUTTER[id]}</svg>`;
+    if (KLEIDUNG_AUSSCHNITT[id]) return `<svg class="laden-bild" viewBox="${KLEIDUNG_AUSSCHNITT[id]}" aria-hidden="true">${ZUBEHOER[id]}</svg>`;
     if (AUSSCHNITT[id]) return `<svg class="laden-bild" viewBox="${AUSSCHNITT[id]}" aria-hidden="true">${ZIMMER[id] || ""}${VORNE[id] || ""}</svg>`;
     return "";
   }
   // Goldene Münze (statt Emoji, das ältere iPads nicht kennen)
   const muenze = () => `<svg class="muenze" viewBox="0 0 24 24" aria-hidden="true"><defs><radialGradient id="ln-gold" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#fff6c2"/><stop offset=".45" stop-color="#f6c744"/><stop offset="1" stop-color="#c98b0b"/></radialGradient></defs><circle cx="12" cy="12" r="11" fill="url(#ln-gold)" stroke="#a87405" stroke-width="1.2"/><circle cx="12" cy="12" r="7.6" fill="none" stroke="#d9a21b" stroke-width="1.2"/><g fill="#b07c08"><ellipse cx="12" cy="14.2" rx="3" ry="2.4"/><circle cx="8.6" cy="10.6" r="1.3"/><circle cx="10.8" cy="8.9" r="1.3"/><circle cx="13.2" cy="8.9" r="1.3"/><circle cx="15.4" cy="10.6" r="1.3"/></g></svg>`;
 
-  root.LN_TIER = { ARTEN, tierSvg, zimmerSvg, ladenIcon, muenze, ZUBEHOER: Object.keys(ZUBEHOER), ZIMMER: Object.keys(ZIMMER).concat(Object.keys(VORNE).filter((k) => !ZIMMER[k])) };
+  root.LN_TIER = { ARTEN, tierSvg, zimmerSvg, freundSvg, ladenIcon, muenze, ZUBEHOER: Object.keys(ZUBEHOER), ZIMMER: Object.keys(ZIMMER).concat(Object.keys(VORNE).filter((k) => !ZIMMER[k])) };
 })(typeof window !== "undefined" ? window : globalThis);

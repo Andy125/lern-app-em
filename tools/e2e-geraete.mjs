@@ -67,12 +67,12 @@ for (const [name, vp] of [["iPad hochkant", IPAD_HOCH], ["iPad quer", IPAD_QUER]
   await messe(page, name + " Tier");
   await foto("tier");
   await page.click("[data-act=heim]");
-  // Spielhalle und beide Spiele: Spielfeld und Knöpfe passen ohne Scrollen auf den Bildschirm
-  await page.evaluate(() => { const s = window.__LN.stand(); s.tokens = 2; window.__LN.speichern(); });
+  // Spielhalle und alle Spiele: Spielfeld und Knöpfe passen ohne Scrollen auf den Bildschirm
+  await page.evaluate(() => { const s = window.__LN.stand(); s.tokens = 3; window.__LN.speichern(); });
   await page.click(".arcade [data-act=spielhalle]");
   await messe(page, name + " Spielhalle");
   await foto("spielhalle");
-  for (const art of ["run", "sprung"]) {
+  for (const art of ["run", "sprung", "kart"]) {
     await page.click(`[data-act=spiel-start][data-arg=${art}]`);
     await page.waitForTimeout(400);
     await messe(page, `${name} Spiel ${art}`);
