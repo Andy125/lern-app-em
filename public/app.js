@@ -475,7 +475,7 @@
     const missionFertig = R.mission && R.nr + 1 >= R.etappen.length;
     if (R.mission) {
       const T = tag(); T.etappen = Math.max(T.etappen, R.nr + 1);
-      if (missionFertig) { T.mission = true; S.muenzen += L.LOHN.mission; S.punkte += L.LOHN.punkteMission; S.tokens += 1; b.tokens += 1; }
+      if (missionFertig) { T.mission = true; S.muenzen += L.LOHN.mission; S.punkte += L.LOHN.punkteMission; S.tokens += 1; b.tokens += 1; b.freund = L.freundschaftsTag(S, heute()); }
     }
     b.muenzen = S.muenzen - R.muenzenStart; b.xp = S.punkte - R.xpStart;
     R.belohnung = b;
@@ -642,6 +642,7 @@
     let h = `<div class="frage-zeile"><h2 class="frage">${t.boss ? `<span class="boss">Boss-Level</span> ` : ""}${esc(t.frage)}</h2>${t.art === "division" && !probe ? `<button class="vorlesen" data-act="div-hilfe" aria-label="Wie ging das noch mal?">?</button>` : ""}<button class="vorlesen" data-act="vorlesen" aria-label="Vorlesen">🔊</button></div>`;
     if (t.text && t.art !== "division") h += `<p class="aufgaben-text${t.art === "wahr" ? " satz" : ""}"${t.textSprache === "en" ? ' lang="en"' : ""}>${esc(t.text)}${t.textSprache === "en" && t.modus === "en-de-wahl" ? ` <button class="vorlesen klein inline" data-act="sag-en" data-arg="${esc(t.text)}" aria-label="Englisch anhören">🔊</button>` : ""}</p>`;
     if (t.fig) h += figHtml(t, R, probe);
+    if (t.bild) h += `<figure class="fig geo-fig">${t.bild}</figure>`;
     switch (t.art) {
       case "wahl": case "wahr": {
         const opts = t.art === "wahr" ? [[true, "Stimmt"], [false, "Stimmt nicht"]] : t.optionen.map((o) => [o, o]);
@@ -833,6 +834,7 @@
       ${b ? `<p>${b.ersteRichtig} von ${b.anzahl} auf Anhieb richtig.</p>` : ""}
       ${belohnungHtml(b)}
       ${mission ? `<p class="leise">Heute ${T.richtig} Aufgaben richtig. Die Mission bringt einen Token extra.</p>` : ""}
+      ${b && b.freund ? (() => { const f = L.freund(b.freund.id); return `<div class="freund-herz"><span class="freund-mini">${TIER.freundSvg(f, { mood: "jubel" })}</span><div><b>${b.freund.herzen === 5 ? `Ihr seid beste Freunde! ${esc(f.name)} bringt dir ${b.freund.geschenk} Münzen mit.` : `${esc(f.name)} freut sich: Freundschaft wächst!`}</b>${herzen(b.freund.herzen)}</div></div>`; })() : ""}
       ${S.tokens ? `<button class="btn haupt gross" data-act="spielhalle">Zur Spielhalle</button>` : ""}
       <button class="btn${S.tokens ? "" : " haupt gross"}" data-act="tier">Zu ${esc(tierName())}</button>
       <button class="btn leise-btn" data-act="heim">Zur Startseite</button></main>`;
@@ -874,6 +876,7 @@
         case "luecke": return `<div class="lernkarte"><p>${esc(k.text).replace(/\{([^}]+)\}/g, "<b>$1</b>")}</p></div>`;
         case "teilen": { const t = L.makeTask(f, k.id, "teilen-ergebnis", 7); return `<div class="lernkarte"><b>${esc(k.titel)}</b><p class="leise">Beispiel</p><div class="karten-rechnung">${rechnungHtml(divLayout(t))}</div><p>${esc(t.erklaerung)}</p></div>`; }
         case "detektiv": { const t = L.makeTask(f, k.id, "detektiv", 7); const zs = {}; t.zeilen.forEach((id) => { zs[id] = id === t.loesung ? "richtig" : ""; }); return `<div class="lernkarte"><b>${esc(k.titel)}</b><p class="leise">Beispiel-Fall: Der Fehler ist grün markiert.</p><div class="karten-rechnung">${rechnungHtml(t.layout, { zeilen: zs, zeilenAktiv: false })}</div><p>${esc(t.erklaerung)}</p></div>`; }
+        case "linie": case "lage": case "welche": case "abstand": { const t = L.makeTask(f, k.id, L.modi(k)[0], 7); return `<div class="lernkarte"><b>${esc(k.titel)}</b><p class="leise">Beispiel: ${esc(t.frage)}</p><figure class="fig geo-fig">${t.bild}</figure><p>${esc(t.erklaerung)}</p></div>`; }
         case "ueberschlag": case "umkehr": case "kopf": case "sach": case "passt": { const t = L.makeTask(f, k.id, L.modi(k)[0], 7); return `<div class="lernkarte"><b>${esc(k.titel)}</b><p class="leise">Beispiel</p><p>${esc((k.typ === "sach" ? [t.text, t.frage] : [t.frage, t.text]).filter(Boolean).join(" "))}</p><p>${esc(t.erklaerung)}</p></div>`; }
         case "bild": return `<div class="lernkarte bildkarte"><b>${esc(k.titel || "")}</b><figure class="fig"><svg viewBox="${esc(k.viewBox)}">${k.svg}${k.marken.map((m) => `<g class="marke markiert"><circle cx="${m.x}" cy="${m.y}" r="13"/><text x="${m.x}" y="${m.y + 5}" text-anchor="middle">${m.nr}</text></g>`).join("")}</svg></figure><ol class="legende">${k.marken.slice().sort((a, b) => a.nr - b.nr).map((m) => `<li value="${m.nr}">${esc(m.begriff)}</li>`).join("")}</ol>${k.merk ? `<p class="merk">🧠 ${esc(k.merk)}</p>` : ""}</div>`;
       }
@@ -1029,7 +1032,7 @@
     const st = L.stufe(S.punkte), naechste = L.STUFEN[st + 1];
     return `${kopf(tierName(), true)}<main class="tier-seite">
       <section class="zimmer-box gross${ui.mood ? " " + ui.mood : ""}" data-act="streicheln" aria-label="${esc(tierName())} streicheln">
-        ${TIER.zimmerSvg(S.tier.art, { besitz: S.besitz, traegt: S.traegt, stufe: st, mood: ui.mood || "froh" })}
+        ${TIER.zimmerSvg(S.tier.art, { besitz: S.besitz, traegt: S.traegt, stufe: st, mood: ui.mood || "froh", besuch: S.besuch ? L.freund(S.besuch) : null })}
         ${ui.sagt ? `<div class="sprechblase">${esc(ui.sagt)}</div>` : ""}
         ${ui.mood === "jubel" ? `<div class="herzen" aria-hidden="true"><i>❤</i><i>❤</i><i>❤</i></div>` : ""}
       </section>
@@ -1038,16 +1041,49 @@
         <button class="${reiter === "futter" ? "aktiv" : ""}" data-act="tier-reiter" data-arg="futter">Futter</button>
         <button class="${reiter === "zubehoer" ? "aktiv" : ""}" data-act="tier-reiter" data-arg="zubehoer">Outfit</button>
         <button class="${reiter === "zimmer" ? "aktiv" : ""}" data-act="tier-reiter" data-arg="zimmer">Zimmer</button>
+        ${S.tier.art === "hund" ? `<button class="${reiter === "freunde" ? "aktiv" : ""}" data-act="tier-reiter" data-arg="freunde">Freunde</button>` : ""}
         <button class="${reiter === "design" ? "aktiv" : ""}" data-act="tier-reiter" data-arg="design">App-Design</button>
       </nav>
       ${reiter === "design" ? `<p class="leise">Neue Designs schaltest du mit Level frei.</p><div class="themen-wahl">${L.THEMES.map((t) => { const frei = level() >= t.ab; return `<button class="theme-knopf${S.theme === t.id ? " aktiv" : ""}" style="background:${THEME_FARBEN[t.id][0]};color:${THEME_FARBEN[t.id][1]}" data-act="theme" data-arg="${t.id}" ${frei ? "" : "disabled"}>${esc(t.name)}<i style="background:${THEME_FARBEN[t.id][2]}"></i><small>${S.theme === t.id ? "aktiv" : frei ? "wählen" : "ab Level " + t.ab}</small></button>`; }).join("")}</div>` : ""}
+      ${reiter === "freunde" ? freundebuch() : ""}
+      ${reiter === "zubehoer" || reiter === "zimmer" ? `<p class="leise laden-stand">${reiter === "zubehoer" ? `${angebot.zubehoer.filter((d) => S.besitz.includes(d.id)).length} von ${angebot.zubehoer.length} Outfit-Teilen` : `${angebot.zimmer.filter((d) => S.besitz.includes(d.id)).length} von ${angebot.zimmer.length} Sachen fürs Zimmer`} gesammelt</p>` : ""}
       <div class="laden">${liste.map((d) => {
         const hat = S.besitz.includes(d.id), an = S.traegt.includes(d.id);
+        const b = L.bedingung(S, d.bed);
         const preis = `<span class="preis">${d.preis} ${TIER.muenze()}</span>`;
-        const unter = reiter === "futter" ? preis : hat ? (reiter === "zubehoer" ? (an ? "trägt es" : "ablegen") : "im Zimmer") : preis;
-        return `<button class="laden-ding${hat ? " hat" : ""}${an ? " an" : ""}${!hat && S.muenzen < d.preis ? " teuer" : ""}" data-act="kaufen" data-arg="${d.id}" ${reiter === "zimmer" && hat ? "disabled" : ""}><span class="icon">${TIER.ladenIcon(d.id) || d.icon}</span><span>${esc(d.name)}</span><small>${unter}</small></button>`;
+        const unter = reiter === "futter" ? preis : hat ? (reiter === "zubehoer" ? (an ? "trägt es" : "anziehen") : "im Zimmer") : !b.ok ? `🔒 ${esc(b.text)}` : preis;
+        return `<button class="laden-ding${hat ? " hat" : ""}${an ? " an" : ""}${!hat && (S.muenzen < d.preis || !b.ok) ? " teuer" : ""}${!hat && !b.ok ? " gesperrt" : ""}" data-act="kaufen" data-arg="${d.id}" ${reiter === "zimmer" && hat ? "disabled" : ""}><span class="icon">${TIER.ladenIcon(d.id) || d.icon}</span><span>${esc(d.name)}</span><small>${unter}</small></button>`;
       }).join("")}</div></main>`;
   }
+  // Hundefreundebuch: alle Freunde als Karten, gesperrte als Silhouette mit Bedingung und Preis
+  const herzen = (n) => `<span class="herzen-reihe" aria-label="${n} von 5 Freundschaftsherzen">${[0, 1, 2, 3, 4].map((i) => `<i class="${i < n ? "voll" : ""}">❤</i>`).join("")}</span>`;
+  function freundebuch() {
+    const anzahl = Object.keys(S.freunde).length;
+    if (ui.freund) return freundSeite(L.freund(ui.freund));
+    return `<div class="freundebuch-kopf"><h2>Hundefreundebuch</h2><p class="leise">${anzahl} von ${L.FREUNDE.length} Freunden. Lade sie ein, wenn du genug geschafft hast. Ist ein Freund zu Besuch und du schaffst die Mission, wächst eure Freundschaft um ein Herz. Bei 5 Herzen seid ihr beste Freunde, und es gibt ein Geschenk.</p></div>
+      <div class="freunde-raster">${L.FREUNDE.map((f) => {
+        const da = S.freunde[f.id], b = L.bedingung(S, f.bed);
+        if (da) return `<button class="freund-karte${S.besuch === f.id ? " besuch" : ""}${da.herzen >= 5 ? " beste" : ""}" data-act="freund" data-arg="${f.id}"><span class="freund-bild">${TIER.freundSvg(f)}</span><b>${esc(f.name)}</b><small>${esc(f.rasse)}</small>${herzen(da.herzen)}${S.besuch === f.id ? `<span class="badge">zu Besuch</span>` : ""}</button>`;
+        return `<button class="freund-karte zu${b.ok ? " bereit" : ""}" data-act="freund" data-arg="${f.id}"><span class="freund-bild schatten">${TIER.freundSvg(f)}</span><b>???</b><small>${esc(f.rasse)}</small><small class="bed">${b.ok ? `${f.preis} ${TIER.muenze()}` : `🔒 ${esc(b.text)}<br>${b.ist} / ${b.soll}`}</small></button>`;
+      }).join("")}</div>`;
+  }
+  function freundSeite(f) {
+    const da = S.freunde[f.id], b = L.bedingung(S, f.bed);
+    const zeile = (k, v) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`;
+    if (!da) return `<div class="steckbrief zu"><button class="btn leise-btn" data-act="freund" data-arg="">‹ Zum Freundebuch</button>
+      <div class="freund-gross schatten">${TIER.freundSvg(f)}</div><h2>Ein ${esc(f.rasse)} möchte dich kennenlernen</h2>
+      ${f.bed ? `<p>${b.ok ? "✓" : "🔒"} ${esc(b.text)}: <b>${b.ist} von ${b.soll}</b></p><div class="balken"><i style="width:${Math.round((100 * b.ist) / b.soll)}%"></i></div>` : ""}
+      <p>Einladen kostet <b>${f.preis}</b> ${TIER.muenze()}. Du hast ${S.muenzen}.</p>
+      <button class="btn haupt gross" data-act="einladen" data-arg="${f.id}" ${b.ok && S.muenzen >= f.preis ? "" : "disabled"}>Einladen</button>
+      ${!b.ok ? `<p class="leise klein">Erst schaffen, dann einladen. Das Üben bringt dich hin.</p>` : S.muenzen < f.preis ? `<p class="leise klein">Noch ${f.preis - S.muenzen} Münzen. Die bekommst du beim Üben.</p>` : ""}</div>`;
+    return `<div class="steckbrief"><button class="btn leise-btn" data-act="freund" data-arg="">‹ Zum Freundebuch</button>
+      <div class="freund-gross">${TIER.freundSvg(f, { mood: S.besuch === f.id ? "jubel" : "froh" })}</div>
+      <h2>${esc(f.name)}</h2>${herzen(da.herzen)}${da.herzen >= 5 ? `<p class="beste-freunde">Beste Freunde!</p>` : `<p class="leise klein">Noch ${5 - da.herzen} ${5 - da.herzen === 1 ? "Herz" : "Herzen"} bis «beste Freunde». Ein Herz gibt es für jeden Tag mit geschaffter Mission, an dem ${esc(f.name)} zu Besuch ist.</p>`}
+      <dl>${zeile("Rasse", f.rasse)}${zeile("Lieblingsspiel", f.spiel)}${zeile("Lieblingsleckerli", f.leckerli)}${zeile("Bester Trick", f.trick)}${zeile("Motto", f.motto)}${zeile("Freunde seit", datumKurz(da.seit))}</dl>
+      <p class="merk">🐾 Wusstest du? ${esc(f.fakt)}</p>
+      ${S.besuch === f.id ? `<button class="btn" data-act="besuch" data-arg="">Nach Hause bringen</button>` : `<button class="btn haupt" data-act="besuch" data-arg="${f.id}">Zu Besuch einladen</button>`}</div>`;
+  }
+  const datumKurz = (iso) => { const [j, m, t] = iso.split("-"); return `${Number(t)}.${Number(m)}.${j}`; };
   let moodTimer = null;
   function tierReagiert(mood, sagt, ms) {
     ui.mood = mood; ui.sagt = sagt; render();
@@ -1055,7 +1091,7 @@
   }
 
   // ================= Spielhalle =================
-  const SPIELE = { sprung: { name: () => "Sky Jump", text: "Von Wolke zu Wolke nach oben, bis ins All. Federn katapultieren dich hoch, braune Wolken bröckeln." }, run: { name: () => `${tierName()} Run`, text: "Springen, Doppelsprung, Knochen sammeln. Wie weit kommst du?" } };
+  const SPIELE = { kart: { name: () => "Turbo Kart", text: "Drei Runden gegen Katze, Fuchs und Hase. Fragezeichen-Kisten geben Turbo oder Matsch, Knochen machen schneller. Jeder Sieg macht die anderen ein bisschen stärker." }, sprung: { name: () => "Sky Jump", text: "Von Wolke zu Wolke nach oben, bis ins All. Federn katapultieren dich hoch, braune Wolken bröckeln." }, run: { name: () => `${tierName()} Run`, text: "Springen, Doppelsprung, Knochen sammeln. Wie weit kommst du?" } };
   function spielhalle() {
     const rest = Math.max(0, S.einst.spieleProTag - (tagLesen().spiele || 0));
     const sperre = !S.einst.spieleProTag ? "Die Spielhalle ist gerade ausgeschaltet." : !S.tokens ? `Keine Tokens. Hol dir welche in der Mission: ${L.tokenNoetig(S.einst.etappe)} von ${S.einst.etappe} auf Anhieb richtig.` : !rest ? "Für heute ist die Spielhalle zu. Morgen geht es weiter." : "";
@@ -1063,7 +1099,7 @@
       <div class="tokens-gross">${TOKEN} ${S.tokens}</div>
       <p class="leise">Eine Runde kostet einen Token. ${S.einst.spieleProTag ? `Heute noch ${rest} ${rest === 1 ? "Runde" : "Runden"}.` : ""}</p>
       ${sperre ? `<p class="hinweis">${sperre}</p>` : ""}
-      ${Object.keys(SPIELE).map((art) => `<article class="spiel-karte"><div><h2>${esc(SPIELE[art].name())}</h2><p>${SPIELE[art].text}</p><p>Rekord: <b>${S.spiele[art].best}</b></p></div><button class="btn haupt gross" data-act="spiel-start" data-arg="${art}" ${sperre ? "disabled" : ""}>Spielen</button></article>`).join("")}
+      ${Object.keys(SPIELE).map((art) => `<article class="spiel-karte"><div><h2>${esc(SPIELE[art].name())}</h2><p>${SPIELE[art].text}</p><p>Rekord: <b>${S.spiele[art].best}</b>${art === "kart" ? ` · Siege: <b>${S.spiele.kart.siege || 0}</b>` : ""}</p></div><button class="btn haupt gross" data-act="spiel-start" data-arg="${art}" ${sperre ? "disabled" : ""}>Spielen</button></article>`).join("")}
       <p class="regel">Tokens gibt es für jede Etappe mit ${L.tokenNoetig(S.einst.etappe)} von ${S.einst.etappe} auf Anhieb richtig, für jede geschaffte Mission und für Probe-Arbeiten ab 80 %.</p>
     </main>`;
   }
@@ -1074,6 +1110,9 @@
     if (art === "sprung") return `${kopfzeile}<main class="spiel spiel-sprung"><div class="sprung-platz"><canvas class="spielfeld" aria-label="Spielfeld"></canvas></div>
       <div class="steuerung"><button data-spiel="links" aria-label="Nach links">◀</button><span class="sprung-info"><b id="hud-hoehe">0 m</b><small id="hud-zeit">3:00</small></span><button data-spiel="rechts" aria-label="Nach rechts">▶</button></div>
       <p class="leise klein mitte-text">Halte links oder rechts gedrückt, auf dem Spielfeld oder mit den Knöpfen.</p></main>`;
+    if (art === "kart") return `${kopfzeile}<main class="spiel spiel-kart"><div class="run-platz"><canvas class="spielfeld" aria-label="Spielfeld"></canvas></div>
+      <div class="steuerung"><button data-spiel="links" aria-label="Nach links">◀</button><button class="item-knopf" data-spiel="item" aria-label="Item benutzen">Item</button><button data-spiel="rechts" aria-label="Nach rechts">▶</button></div>
+      <p class="leise klein mitte-text">Gas gibt dein Kart von selbst. Halte links oder rechts gedrückt, auf dem Spielfeld oder mit den Knöpfen. Item: Turbo oder Matschpfütze nach hinten.</p></main>`;
     return `${kopfzeile}<main class="spiel spiel-run"><div class="run-platz"><canvas class="spielfeld" aria-label="Spielfeld"></canvas></div>
       <p class="leise">Tippen: springen. Länger drücken: höher. In der Luft noch mal tippen: Doppelsprung.</p></main>`;
   }
@@ -1088,7 +1127,7 @@
     ui.spielNeu = false;
     const art = ui.spielArt, A = TIER.ARTEN[S.tier.art] || {};
     spielCtrl = window.LN_SPIELE.starte(box, {
-      art, seed: zufall(), manuell: !!TEST.spielManuell,
+      art, seed: zufall(), manuell: !!TEST.spielManuell, siege: S.spiele.kart.siege || 0,
       tier: { fell: A.farbe, dunkel: A.dunkel, hell: A.hell || A.bauch, halsband: S.traegt.includes("halsband") },
       onPunkte: (z) => {
         const set = (id, v) => { const el = document.getElementById(id); if (el && el.textContent !== String(v)) el.textContent = v; };
@@ -1099,14 +1138,14 @@
     });
   }
   function spielVorbei(art, erg) {
-    const r = L.spielEnde(S, art, erg.punkte);
+    const r = L.spielEnde(S, art, erg.punkte, ui.spielAbbruch ? 0 : erg.platz);
     speichern();
     const box = app.querySelector(".spiel"); if (!box) return;
     const rest = Math.max(0, S.einst.spieleProTag - (tagLesen().spiele || 0));
     const geht = S.tokens > 0 && rest > 0;
-    const grund = ui.spielAbbruch ? "Spiel beendet." : erg.zeitUm ? "Zeit um." : art === "sprung" ? "Abgestürzt." : erg.grund === "grube" ? "In die Grube gefallen." : "Zusammengestoßen.";
+    const grund = ui.spielAbbruch ? "Spiel beendet." : erg.zeitUm ? "Zeit um." : art === "kart" ? (erg.platz === 1 ? "Sieg! Platz 1." : `Platz ${erg.platz} von 4.`) : art === "sprung" ? "Abgestürzt." : erg.grund === "grube" ? "In die Grube gefallen." : "Zusammengestoßen.";
     const el = document.createElement("div"); el.className = "spiel-ende";
-    el.innerHTML = `<div class="dialog" role="dialog" aria-label="Ergebnis"><p class="leise">${grund}</p><div class="zahl">${erg.punkte}</div><p>${r.rekord ? "Neuer Rekord!" : `Rekord: ${S.spiele[art].best}`}</p><p class="leise">${art === "sprung" ? `${erg.hoehe} m hoch, ` : ""}${erg.knochen} Knochen gesammelt</p>
+    el.innerHTML = `<div class="dialog" role="dialog" aria-label="Ergebnis"><p class="leise">${grund}</p><div class="zahl">${erg.punkte}</div><p>${r.rekord ? "Neuer Rekord!" : `Rekord: ${S.spiele[art].best}`}</p><p class="leise">${art === "sprung" ? `${erg.hoehe} m hoch, ` : ""}${art === "kart" && erg.zeit ? `${erg.zeit.toFixed(1).replace(".", ",")} Sekunden, ` : ""}${erg.knochen} Knochen gesammelt</p>
       <div class="knopfzeile" style="justify-content:center">${geht ? `<button class="btn haupt" data-act="spiel-start" data-arg="${art}">Noch mal (1 Token)</button>` : ""}<button class="btn" data-act="spielhalle">Spielhalle</button></div></div>`;
     box.appendChild(el);
     spielCtrl = null;
@@ -1413,17 +1452,25 @@
       case "probe-skip": probeAntwort(true); return;
       // Tier
       case "tier": gehe("tier", { reiter: "futter" }); return;
-      case "tier-reiter": ui.reiter = arg; render(); return;
+      case "tier-reiter": ui.reiter = arg; ui.freund = null; render(); return;
+      case "freund": ui.freund = arg || null; render(); window.scrollTo(0, 0); return;
+      case "einladen": {
+        const r = L.einladen(S, arg, heute()); if (!r.ok) return;
+        speichern(); ui.freund = arg; konfetti(); ton(12);
+        tierReagiert("jubel", `${r.freund.name} ist da! Wuff!`, 2600); return;
+      }
+      case "besuch": S.besuch = arg && S.freunde[arg] ? arg : ""; speichern(); if (arg) tierReagiert("jubel", "Besuch! Wuff!", 1800); else render(); return;
       case "theme": { const t = L.THEMES.find((x) => x.id === arg); if (t && level() >= t.ab) { S.theme = t.id; speichern(); render(); } return; }
       case "streicheln": if (ui.ansicht === "start") { gehe("tier", { reiter: "futter" }); return; } tierReagiert("jubel", pick(["Wuff.", "Noch mal.", "Kraulen ist gut."]), 1500); return;
       case "kaufen": {
         const d = L.shopDing(arg); if (!d) return;
-        if (L.SHOP.zubehoer.includes(d) && S.besitz.includes(d.id)) {
-          const i = S.traegt.indexOf(d.id); if (i >= 0) S.traegt.splice(i, 1); else S.traegt.push(d.id);
-          speichern(); render(); return;
-        }
+        if (L.SHOP.zubehoer.includes(d) && S.besitz.includes(d.id)) { L.anziehen(S, d.id); speichern(); render(); return; }
         const r = L.kaufe(S, arg);
-        if (!r.ok) { if (r.grund === "muenzen") tierReagiert(null, `Dafür fehlen noch ${r.fehlt} Münzen. Die bekommst du beim Üben!`, 2600); return; }
+        if (!r.ok) {
+          if (r.grund === "muenzen") tierReagiert(null, `Dafür fehlen noch ${r.fehlt} Münzen. Die bekommst du beim Üben!`, 2600);
+          if (r.grund === "bedingung") tierReagiert(null, `Noch gesperrt: ${r.bed.text}. Du hast ${r.bed.ist} von ${r.bed.soll}.`, 3000);
+          return;
+        }
         speichern();
         if (r.snack) tierReagiert(d.id === "wasser" ? "jubel" : "mampf", d.id === "wasser" ? "Schlabber." : pick(["Mmh.", "Lecker.", "Mehr davon."]), 2000);
         else tierReagiert("jubel", L.SHOP.zubehoer.includes(d) ? "Neuer Look." : "Neu im Zimmer.", 1800);

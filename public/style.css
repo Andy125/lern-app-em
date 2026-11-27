@@ -415,6 +415,35 @@ table.vokabeln .vorlesen.klein { float: none; }
 .hilfe .moves-liste { padding-left: 22px; }
 .hilfe .moves-liste li { margin: 8px 0; }
 
+/* Hundefreunde */
+.laden-stand { margin: 4px 0 0; }
+.laden-ding.gesperrt small { color: var(--leise); font-size: 12px; }
+.freundebuch-kopf h2 { margin: 6px 0 4px; }
+.freunde-raster { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 10px; margin-top: 10px; }
+.freund-karte { display: flex; flex-direction: column; align-items: center; padding: 10px 8px 12px; border-radius: 18px; border: 1.5px solid var(--rand); background: var(--flaeche); color: var(--text); font: inherit; cursor: pointer; position: relative; }
+.freund-karte b { font-family: "Sora", system-ui, sans-serif; font-size: 17px; }
+.freund-karte small { color: var(--leise); font-size: 13px; text-align: center; }
+.freund-karte .bed { margin-top: 4px; line-height: 1.3; }
+.freund-karte.besuch { border-color: var(--gut); box-shadow: 0 0 0 3px var(--gut-hell, rgba(95, 221, 190, .3)); }
+.freund-karte.beste { background: linear-gradient(160deg, var(--flaeche), rgba(255, 209, 102, .18)); border-color: #f2c94c; }
+.freund-karte.bereit { border-color: var(--akzent); }
+.freund-karte .badge { position: absolute; top: 6px; right: 6px; font-size: 11px; background: var(--gut); color: #0b2d25; border-radius: 999px; padding: 2px 7px; font-weight: 700; }
+.freund-bild svg, .freund-gross svg, .freund-mini svg { width: 100%; height: 100%; display: block; }
+.freund-bild { width: 92px; height: 92px; }
+.schatten svg { filter: brightness(0) opacity(.28); }
+.herzen-reihe i { font-style: normal; color: var(--rand); font-size: 15px; margin: 0 1px; }
+.herzen-reihe i.voll { color: #ff5fa2; }
+.steckbrief { background: var(--flaeche); border-radius: 22px; padding: 16px 18px 20px; margin-top: 10px; text-align: center; }
+.steckbrief .freund-gross { width: 180px; height: 180px; margin: 6px auto; }
+.steckbrief dl { display: grid; grid-template-columns: 1fr; gap: 6px; text-align: left; margin: 14px 0; }
+.steckbrief dl div { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px dashed var(--rand); padding: 6px 2px; }
+.steckbrief dt { color: var(--leise); }
+.steckbrief dd { margin: 0; font-weight: 650; text-align: right; }
+.steckbrief .balken { max-width: 320px; margin: 6px auto 12px; }
+.beste-freunde { color: #f2c94c; font-weight: 800; font-family: "Sora", system-ui, sans-serif; }
+.freund-herz { display: flex; align-items: center; gap: 12px; background: var(--flaeche); border-radius: 18px; padding: 10px 14px; margin: 10px auto; max-width: 460px; text-align: left; }
+.freund-mini { width: 64px; height: 64px; flex: none; }
+
 /* Eltern */
 .eltern .karte { margin-top: 4px; }
 .wackel { columns: 2; padding-left: 20px; }
@@ -486,3 +515,7 @@ body.ruhig *, body.ruhig *::before, body.ruhig *::after { animation: none !impor
   .etappen-punkte > * + *, .fortschritt > * + * { margin-left: 6px; }
   .knopfzeile > *, .reiter > *, .faecher > *, .wortbank > *, .belohnung > * { margin: 0 10px 10px 0; }
 }
+.spiel-kart .steuerung { align-items: center; }
+.spiel-kart .steuerung button { width: 120px; height: 68px; font-size: 30px; }
+.spiel-kart .steuerung .item-knopf { width: 110px; font-size: 18px; font-weight: 800; background: #ffd166; color: #3a2a00; border-color: #e0a800; }
+@media (max-width: 560px) { .spiel-kart .steuerung button { width: 92px; } .spiel-kart .steuerung .item-knopf { width: 84px; } }
